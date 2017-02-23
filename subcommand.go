@@ -2,7 +2,10 @@ package cli
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 )
 
@@ -68,6 +71,8 @@ type SubCommand interface {
 type SubCommander struct {
 	GlobalFlags FlagSetter
 
+	AllowGlobalFlagsWithSubCommand bool
+
 	names   map[string]SubCommand
 	aliases map[string]SubCommand
 }
@@ -107,12 +112,19 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 }
 
 func (sc *SubCommander) executeContextOut(ctx context.Context, args []string, out, outErr io.Writer) error {
-	if len(args) < 1 {
-		return ErrUnsuppliedSubCommand
+	f := newFlagSet("")
+
+	if sc.GlobalFlags != nil {
+		sc.GlobalFlags.SetFlags(f)
+	}
+	if err := f.Parse(args); err != nil {
+		return ErrParsingGlobalFlags(err)
 	}
 
-	//need to actually parse global flags and get subcommand from Args().
-
+	args = f.Args()
+	if len(args) == 0 {
+		return ErrUnsuppliedSubCommand
+	}
 	name := args[0]
 	args = args[1:]
 
@@ -121,7 +133,7 @@ func (sc *SubCommander) executeContextOut(ctx context.Context, args []string, ou
 		return ErrUnknownSubCommand(name)
 	}
 
-	return sc.executeSubCommand(ctx, subCommand, out, outErr)
+	return sc.executeSubCommand(ctx, f, subCommand, args, out, outErr)
 }
 
 func (sc *SubCommander) getSubCommand(name string) SubCommand {
@@ -134,6 +146,65 @@ func (sc *SubCommander) getSubCommand(name string) SubCommand {
 	return nil
 }
 
-func (sc *SubCommander) executeSubCommand(ctx context.Context, subCommand SubCommand, out, outErr io.Writer) error {
-	return nil
+func (sc *SubCommander) executeSubCommand(
+	ctx context.Context,
+	gfs *flag.FlagSet,
+	subCommand SubCommand,
+	args []string,
+	out, outErr io.Writer,
+) (err error) {
+	defer func() {
+		if err != nil {
+			return
+		}
+		if r := recover(); r != nil {
+			err = ErrParsingSubCommand(fmt.Errorf("%v", r))
+		}
+	}()
+
+	scf := newFlagSet(subCommand.Name())
+	subCommand.SetFlags(scf)
+	if sc.AllowGlobalFlagsWithSubCommand {
+		subCommand.SetFlags(gfs)
+	}
+
+	err = parseSubCommandFlags(scf, subCommand, args)
+	if err != nil {
+		err = ErrParsingSubCommand(err)
+		return
+	}
+
+	err = subCommand.Execute(ctx, out, outErr)
+	if err != nil {
+		err = ErrExecutingSubCommand(err)
+	}
+
+	return
+}
+
+func parseSubCommandFlags(f *flag.FlagSet, subCommand SubCommand, args []string) error {
+	var err error = nil
+
+	index := 0
+	for err == nil && len(args) > 0 {
+		err = f.Parse(args)
+		args = f.Args()
+		if err == nil && len(args) > 0 {
+			err = subCommand.SetParameter(index, args[0])
+			index++
+			args = args[1:]
+		}
+	}
+	if err == nil {
+		err = subCommand.ValidateParameters()
+	}
+
+	return err
+}
+
+func newFlagSet(name string) *flag.FlagSet {
+	f := flag.NewFlagSet(name, flag.ContinueOnError)
+	f.Usage = func() {}
+	f.SetOutput(ioutil.Discard)
+	return f
 }

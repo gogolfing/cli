@@ -30,3 +30,13 @@ type ErrUnknownSubCommand string
 func (e ErrUnknownSubCommand) Error() string {
 	return fmt.Sprintf("unknown sub_command %q", string(e))
 }
+
+type ErrParsingGlobalFlags error
+
+type ErrParsingSubCommand error
+
+type ErrExecutingSubCommand error
+
+func IsExecutionError(err error) bool {
+	return err.(ErrExecutingSubCommand) != nil
+}
