@@ -95,10 +95,12 @@ func (sc *SubCommander) Register(subCommand SubCommand) {
 	}
 }
 
+//Execute is syntactic sugar for ExecuteContext() with context.Background().
 func (sc *SubCommander) Execute(args []string) error {
 	return sc.ExecuteContext(context.Background(), args)
 }
 
+//ExecuteContext is syntactic sugar for ExecuteContextOut() with os.Stdout and os.Stderr.
 func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string) error {
 	return sc.ExecuteContextOut(ctx, args, os.Stdout, os.Stderr)
 }
@@ -164,8 +166,8 @@ func (sc *SubCommander) executeSubCommand(
 
 	scf := newFlagSet(subCommand.Name())
 	subCommand.SetFlags(scf)
-	if sc.AllowGlobalFlagsWithSubCommand {
-		subCommand.SetFlags(gfs)
+	if sc.AllowGlobalFlagsWithSubCommand && sc.GlobalFlags != nil {
+		sc.GlobalFlags.SetFlags(scf)
 	}
 
 	err = parseSubCommandFlags(scf, subCommand, args)
