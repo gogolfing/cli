@@ -31,9 +31,16 @@ func (e ErrUnknownSubCommand) Error() string {
 	return fmt.Sprintf("unknown sub_command %q", string(e))
 }
 
-type ErrParsingGlobalFlags error
+type ErrParsingGlobalArgs error
 
 type ErrParsingSubCommand error
+
+type ErrFlagsAfterParameters string
+
+func (e ErrFlagsAfterParameters) Error() string {
+	//TODO change this message.
+	return fmt.Sprintf("flags present after parameters: %v", string(e))
+}
 
 type ErrExecutingSubCommand error
 

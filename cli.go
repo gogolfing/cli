@@ -2,6 +2,8 @@ package cli
 
 import "flag"
 
+const DoubleMinus = "--"
+
 //ParameterFlagMode determines how arguments are parsed for SubCommands.
 type ParameterFlagMode int
 
