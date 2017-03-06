@@ -19,7 +19,7 @@ type SubCommand interface {
 
 	//Aliases returns the aliases of the SubCommand.
 	//These are listed in command help output and will cause a SubCommand to execute
-	//just as if the SubCommand's name used from the command line.
+	//just as if the SubCommand's name were used from the command line.
 	//Aliases must not overlap with other SubCommand Name()s or Aliases() in the
 	//same SubCommander.
 	Aliases() []string
@@ -36,8 +36,20 @@ type SubCommand interface {
 	//FlagSetter for SubCommand flags.
 	FlagSetter
 
-	ParameterUsage(format func(p *Parameter) string) string
+	//ParameterUsage returns the help and error output message for describing
+	//how a sub-command's parameters should be used.
+	//The return value usage is the help message. It should not contain any leading
+	//or trailing whitespace. And hasParams denotes whether or not this SubCommand
+	//actually has any parameters. A false value means that usage is ignored and
+	//a generic no parameters message can be used.
 
+	//ParameterUsage returns the Parameters used by the SubCommand and a possible
+	//usage string to describe params in more detail.
+	//These values are used in help and error output.
+	ParameterUsage() (params []*Parameter, usage string)
+
+	//SetParameters allows SubCommands to receive parameter arguments during argument
+	//parsing.
 	SetParameters(values []string) error
 
 	//Execute is where the SubCommand should do its work.
@@ -59,6 +71,70 @@ type SubCommander struct {
 
 	names   map[string]SubCommand
 	aliases map[string]SubCommand
+}
+
+//RegisterHelp registers a help SubCommand that prints out help information about
+//a required sub-command parameter.
+//The SubCommand's name, synopsis, description, and aliases are provided as parameters.
+//If synopsis or description are the empty string, then defaults are used.
+func (sc *SubCommander) RegisterHelp(name, synopsis, description string, aliases ...string) {
+	help := &helpSubCommand{
+		sc: sc,
+	}
+
+	if synopsis == "" {
+		synopsis = fmt.Sprintf("Prints help information for a %v", SubCommandName)
+	}
+	if description == "" {
+		description = fmt.Sprintf(
+			"%v. This includes usage information about the %v's %v and %v",
+			synopsis,
+			SubCommandName,
+			ParametersName,
+			SubCommandOptionsName,
+		)
+	}
+
+	sc.Register(
+		&SubCommandStruct{
+			NameValue:           name,
+			AliasesValue:        aliases,
+			SynopsisValue:       synopsis,
+			DescriptionValue:    description,
+			ParameterUsageValue: help.ParameterUsage,
+			SetParametersValue:  help.SetParameters,
+			ExecuteValue:        help.Execute,
+		},
+	)
+}
+
+//RegisterListSubCommands registers a list SubCommand that prints out all available
+//sub-commands when invoked.
+//The SubCommand's name, synopsis, description, and aliases are provided as parameters.
+//If synopsis or description or the empty string, then defaults are used.
+func (sc *SubCommander) RegisterListSubCommands(name, synopsis, description string, aliases ...string) {
+	list := &listSubCommand{
+		sc: sc,
+	}
+
+	if synopsis == "" {
+		synopsis = fmt.Sprintf("Prints available %vs", SubCommandName)
+	}
+	if description == "" {
+		description = synopsis
+	}
+
+	sc.Register(
+		&SubCommandStruct{
+			NameValue:           name,
+			AliasesValue:        aliases,
+			SynopsisValue:       synopsis,
+			DescriptionValue:    description,
+			ParameterUsageValue: list.ParameterUsage,
+			SetParametersValue:  list.SetParameters,
+			ExecuteValue:        list.Execute,
+		},
+	)
 }
 
 //Register registers subCommand to be possibly executed later via its Name() or
@@ -89,6 +165,14 @@ func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string) error
 	return sc.ExecuteContextOut(ctx, args, os.Stdout, os.Stderr)
 }
 
+//ExecuteContextOut attempts to find and execute a registered SubCommand.
+//ctx will be passed along unaltered to the SubCommand's Execute() method.
+//args are the command line arguments to parse and use for SubCommand execution.
+//They should include everything after the command invoked (os.Args[1:]).
+//out and outErr are the io.Writers to use for standard out and standard error
+//for SubCommand execution and help and error output.
+//
+//
 func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, out, outErr io.Writer) (err error) {
 	var subCommand SubCommand = nil
 
@@ -135,7 +219,7 @@ func (sc *SubCommander) executeContextOut(ctx context.Context, args []string, ou
 		sc.GlobalFlags.SetFlags(f)
 	}
 	if err := f.Parse(args); err != nil {
-		return nil, ErrParsingGlobalArgs(err)
+		return nil, &ErrParsingGlobalArgs{err}
 	}
 
 	args = f.Args()
@@ -175,19 +259,19 @@ func (sc *SubCommander) executeSubCommand(
 			return
 		}
 		if r := recover(); r != nil {
-			err = ErrParsingSubCommand(fmt.Errorf("%v", r))
+			err = ErrParsingSubCommand{fmt.Errorf("%v", r)}
 		}
 	}()
 
 	err = sc.parseSubCommandArgs(subCommand, args)
 	if err != nil {
-		err = ErrParsingSubCommand(err)
+		err = ErrParsingSubCommand{err}
 		return
 	}
 
 	err = subCommand.Execute(ctx, out, outErr)
 	if err != nil {
-		err = ErrExecutingSubCommand(err)
+		err = &ErrExecutingSubCommand{err}
 	}
 
 	return
@@ -289,4 +373,59 @@ func newFlagSet(name string) *flag.FlagSet {
 	f.Usage = func() {}
 	f.SetOutput(ioutil.Discard)
 	return f
+}
+
+type helpSubCommand struct {
+	sc *SubCommander
+
+	helpCommandName string
+}
+
+func (h *helpSubCommand) ParameterUsage() ([]*Parameter, string) {
+	params := []*Parameter{
+		{Name: SubCommandName, Optional: false, Many: false},
+	}
+	usage := fmt.Sprintf("%v is the %v to provide help for", FormatParameterName(params[0].Name), SubCommandName)
+
+	return params, usage
+}
+
+func (h *helpSubCommand) SetParameters(params []string) error {
+	if len(params) > 1 {
+		return ErrInvalidParameters
+	}
+	if len(params) == 0 {
+		return &ErrRequiredParameterNotSet{
+			Name: SubCommandName,
+			Many: false,
+		}
+	}
+
+	h.helpCommandName = params[0]
+	return nil
+}
+
+func (h *helpSubCommand) Execute(_ context.Context, out, _ io.Writer) error {
+	_, err := fmt.Fprintln(out, "help execute unimplemented")
+	return err
+}
+
+type listSubCommand struct {
+	sc *SubCommander
+}
+
+func (l *listSubCommand) ParameterUsage() ([]*Parameter, string) {
+	return nil, NoParametersUsage
+}
+
+func (l *listSubCommand) SetParameters(params []string) error {
+	if len(params) != 0 {
+		return fmt.Errorf(NoParametersUsage)
+	}
+	return nil
+}
+
+func (l *listSubCommand) Execute(_ context.Context, out, _ io.Writer) error {
+	_, err := fmt.Fprintln(out, "list execute unimplemented")
+	return err
 }
