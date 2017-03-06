@@ -12,38 +12,68 @@ type ErrExitStatus struct {
 	error
 }
 
-var ErrInvalidParameter = fmt.Errorf("invalid parameter")
+//ErrInvalidParameters is a generic error for invalid parameters being set.
+var ErrInvalidParameters = fmt.Errorf("invalid %v", ParametersName)
 
+//ErrRequiredParameterNotSet is an error that denotes a parameter was not supplied
+//in the arguments but is required to be present.
 type ErrRequiredParameterNotSet struct {
 	Name string
 	Many bool
 }
 
+//Error provides the error implementation.
 func (e *ErrRequiredParameterNotSet) Error() string {
-	return fmt.Sprintf("required parameter %v not set", FormatParameter(&Parameter{Name: e.Name, Many: e.Many}))
+	return fmt.Sprintf(
+		"required %v %v not set",
+		ParameterName,
+		FormatParameter(&Parameter{Name: e.Name, Many: e.Many}),
+	)
 }
 
-var ErrUnsuppliedSubCommand = fmt.Errorf("sub_command not supplied")
+//ErrUnsuppliedSubCommand is a value error denoting a sub-command was not supplied
+//during argument parsing.
+var ErrUnsuppliedSubCommand = fmt.Errorf("%v not supplied", SubCommandName)
 
+//ErrUnknownSubCommand is an error denoting the provided sub-command is not registered.
 type ErrUnknownSubCommand string
 
+//Error provides the error implementation.
 func (e ErrUnknownSubCommand) Error() string {
-	return fmt.Sprintf("unknown sub_command %q", string(e))
+	return fmt.Sprintf("unknown %v %q", SubCommandName, string(e))
 }
 
-type ErrParsingGlobalArgs error
+//ErrParsingGlobalArgs is an error wrapper denoting global argument parsing failed.
+type ErrParsingGlobalArgs struct {
+	error
+}
 
-type ErrParsingSubCommand error
+//ErrParsingSubCommand is an error wrapper denoting sub-command argument parsing
+//failed.
+type ErrParsingSubCommand struct {
+	error
+}
 
+//ErrFlagsAfterParameters is an error denoting flags were parsed after the parameter
+//arguments. Note that this error will be used only with specific ParameterFlagModes.
 type ErrFlagsAfterParameters string
 
+//Error provides the error implementation.
 func (e ErrFlagsAfterParameters) Error() string {
-	//TODO change this message.
-	return fmt.Sprintf("flags present after parameters: %v", string(e))
+	return fmt.Sprintf("flags present after %v: %v", ParametersName, string(e))
 }
 
-type ErrExecutingSubCommand error
+//ErrExecutingSubCommand is an error wrapper denoting that executing a sub-command
+//failed.
+type ErrExecutingSubCommand struct {
+	error
+}
 
+//IsExecutionError returns whether or not err is an ErrExecutingSubCommand error.
 func IsExecutionError(err error) bool {
-	return err.(ErrExecutingSubCommand) != nil
+	switch err.(type) {
+	case ErrExecutingSubCommand, *ErrExecutingSubCommand:
+		return true
+	}
+	return false
 }
