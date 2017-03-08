@@ -7,20 +7,16 @@ import "flag"
 const DoubleMinus = "--"
 
 //Output values that affect error and help output.
-//
-//These variables may be changed to affect the output of this package.
-var (
-	//UsageFormat is used to format the usage line of help and error output.
-	//It should have exactly one format argument that is the command or sub-command.
+const (
 	UsageFormat = "Usage of %v:"
 
-	//AvailableFormat is used the format available flag and parameter usage.
-	//It should have exactly one format argument that is the type being described.
 	AvailableFormat = "Available %v:"
 
-	ParameterName         = "parameter"
-	ParametersName        = "parameters"
-	GlobalOptionsName     = "global_options"
+	GlobalOptionsName = "global_options"
+
+	ParameterName  = "parameter"
+	ParametersName = "parameters"
+
 	SubCommandName        = "sub_command"
 	SubCommandOptionsName = "sub_command_options"
 

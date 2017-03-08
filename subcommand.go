@@ -36,13 +36,6 @@ type SubCommand interface {
 	//FlagSetter for SubCommand flags.
 	FlagSetter
 
-	//ParameterUsage returns the help and error output message for describing
-	//how a sub-command's parameters should be used.
-	//The return value usage is the help message. It should not contain any leading
-	//or trailing whitespace. And hasParams denotes whether or not this SubCommand
-	//actually has any parameters. A false value means that usage is ignored and
-	//a generic no parameters message can be used.
-
 	//ParameterUsage returns the Parameters used by the SubCommand and a possible
 	//usage string to describe params in more detail.
 	//These values are used in help and error output.
@@ -63,10 +56,23 @@ type SubCommand interface {
 //
 //Note that SubCommander is NOT safe for use with multiple goroutines.
 type SubCommander struct {
+	//GlobalFlags is a FlagSetter that is used for setting global flags for subcommands.
 	GlobalFlags FlagSetter
 
+	//DisallowGlobalFlagsWithSubCommand denotes whether or not global flags may
+	//be present once the sub-command has been defined in the arguments.
+	//
+	//For example, a false value would allow the following arguments:
+	//	["-global1" "1" "sub-command" "-global2" "2" "-subcommand1" "sc1"]
+	//while true would not. A true value would require the above ["-global2" "2"]
+	//to come before "sub-command" in the argument slice.
 	DisallowGlobalFlagsWithSubCommand bool
 
+	//ParameterFlagMode is the mode used when parsing sub-command flags (and the
+	//possible inclusion of global flags depending on the value of
+	//DisallowGlobalFlagsWithsubCommand) and parameters.
+	//
+	//See the ParameterFlagMode type for more details. It is set to
 	ParameterFlagMode
 
 	names   map[string]SubCommand
@@ -207,7 +213,7 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 		return
 	}
 
-	fmt.Println(subCommand.Name())
+	fmt.Fprintf(ioutil.Discard, subCommand.Name())
 
 	return
 }
