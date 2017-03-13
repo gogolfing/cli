@@ -8,9 +8,9 @@ const DoubleMinus = "--"
 
 //Output values that affect error and help output.
 const (
-	UsageFormat = "Usage of %v:"
+	UsageFormat = "Usage of %s:"
 
-	AvailableFormat = "Available %v:"
+	AvailableFormat = "Available %s:"
 
 	GlobalOptionsName = "global_options"
 
@@ -18,6 +18,7 @@ const (
 	ParametersName = "parameters"
 
 	SubCommandName        = "sub_command"
+	SubCommandsName       = "sub_commands"
 	SubCommandOptionsName = "sub_command_options"
 
 	NoParametersUsage = "there are no " + ParametersName
@@ -42,4 +43,17 @@ const (
 //argument parsing occurs.
 type FlagSetter interface {
 	SetFlags(f *flag.FlagSet)
+}
+
+func FormatArgument(name string, optional, many bool) string {
+	result := name
+	if many {
+		result += " ..."
+	}
+	if optional {
+		result = "[" + result + "]"
+	} else {
+		result = "<" + result + ">"
+	}
+	return result
 }

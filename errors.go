@@ -1,10 +1,13 @@
 package cli
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
-//ErrExitStatus allows wrapping together an exit status with an error providing
+//ExitStatusError allows wrapping together an exit status with an error providing
 //that exist code.
-type ErrExitStatus struct {
+type ExitStatusError struct {
 	//Code is the desired exit status.
 	Code int
 
@@ -13,17 +16,19 @@ type ErrExitStatus struct {
 }
 
 //ErrInvalidParameters is a generic error for invalid parameters being set.
-var ErrInvalidParameters = fmt.Errorf("invalid %v", ParametersName)
+//Note that this error message will not be printed to output, it is simply a sentinel
+//value.
+var ErrInvalidParameters = errors.New("invalid parameters")
 
-//ErrRequiredParameterNotSet is an error that denotes a parameter was not supplied
+//RequiredParameterNotSetError is an error that denotes a parameter was not supplied
 //in the arguments but is required to be present.
-type ErrRequiredParameterNotSet struct {
+type RequiredParameterNotSetError struct {
 	Name string
 	Many bool
 }
 
 //Error provides the error implementation.
-func (e *ErrRequiredParameterNotSet) Error() string {
+func (e *RequiredParameterNotSetError) Error() string {
 	return fmt.Sprintf(
 		"required %v %v not set",
 		ParameterName,
@@ -33,46 +38,48 @@ func (e *ErrRequiredParameterNotSet) Error() string {
 
 //ErrUnsuppliedSubCommand is a value error denoting a sub-command was not supplied
 //during argument parsing.
-var ErrUnsuppliedSubCommand = fmt.Errorf("%v not supplied", SubCommandName)
+//Note that this error message will not be printed to output, it is simply a sentinel
+//value.
+var ErrUnsuppliedSubCommand = errors.New("sub-command not supplied")
 
-//ErrUnknownSubCommand is an error denoting the provided sub-command is not registered.
-type ErrUnknownSubCommand string
+//UnknownSubCommandError is an error denoting the provided sub-command is not registered.
+type UnknownSubCommandError string
 
 //Error provides the error implementation.
-func (e ErrUnknownSubCommand) Error() string {
+func (e UnknownSubCommandError) Error() string {
 	return fmt.Sprintf("unknown %v %q", SubCommandName, string(e))
 }
 
-//ErrParsingGlobalArgs is an error wrapper denoting global argument parsing failed.
-type ErrParsingGlobalArgs struct {
+//ParsingGlobalArgsError is an error wrapper denoting global argument parsing failed.
+type ParsingGlobalArgsError struct {
 	error
 }
 
-//ErrParsingSubCommand is an error wrapper denoting sub-command argument parsing
+//ParsingSubCommandError is an error wrapper denoting sub-command argument parsing
 //failed.
-type ErrParsingSubCommand struct {
+type ParsingSubCommandError struct {
 	error
 }
 
-//ErrFlagsAfterParameters is an error denoting flags were parsed after the parameter
+//FlagsAfterParametersError is an error denoting flags were parsed after the parameter
 //arguments. Note that this error will be used only with specific ParameterFlagModes.
-type ErrFlagsAfterParameters string
+type FlagsAfterParametersError string
 
 //Error provides the error implementation.
-func (e ErrFlagsAfterParameters) Error() string {
+func (e FlagsAfterParametersError) Error() string {
 	return fmt.Sprintf("flags present after %v: %v", ParametersName, string(e))
 }
 
-//ErrExecutingSubCommand is an error wrapper denoting that executing a sub-command
+//ExecutingSubCommandError is an error wrapper denoting that executing a sub-command
 //failed.
-type ErrExecutingSubCommand struct {
+type ExecutingSubCommandError struct {
 	error
 }
 
-//IsExecutionError returns whether or not err is an ErrExecutingSubCommand error.
+//IsExecutionError returns whether or not err is an ExecutingSubCommandError error.
 func IsExecutionError(err error) bool {
 	switch err.(type) {
-	case ErrExecutingSubCommand, *ErrExecutingSubCommand:
+	case ExecutingSubCommandError, *ExecutingSubCommandError:
 		return true
 	}
 	return false

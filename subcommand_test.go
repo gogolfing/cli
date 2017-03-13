@@ -92,21 +92,26 @@ func TestSubCommander_Execute_CallsExecuteContextOutCorrectly(t *testing.T) {
 }
 
 func TestSubCommander_ExecuteContextOut_ErrUnsuppliedSubCommmand(t *testing.T) {
+	outErrString := "sub_command not supplied\n\n"
+
 	tests := []*SubCommanderTest{
 		{
-			Args: nil,
-			Err:  ErrUnsuppliedSubCommand,
+			Args:         nil,
+			OutErrString: outErrString,
+			Err:          ErrUnsuppliedSubCommand,
 		},
 		{
-			Args: []string{},
-			Err:  ErrUnsuppliedSubCommand,
+			Args:         []string{},
+			OutErrString: outErrString,
+			Err:          ErrUnsuppliedSubCommand,
 		},
 		{
 			SubCommander: &SubCommander{
 				GlobalFlags: NewStringsFlagSetter("value"),
 			},
-			Args: []string{"-value", "1234"},
-			Err:  ErrUnsuppliedSubCommand,
+			Args:         []string{"-value", "1234"},
+			OutErrString: outErrString,
+			Err:          ErrUnsuppliedSubCommand,
 		},
 	}
 
@@ -124,6 +129,9 @@ func NewExecuteFunc(out, outErr string, err error) func(context.Context, io.Writ
 
 type SubCommanderTest struct {
 	*SubCommander
+
+	//CommandName is set here as a convenience to setting it on SubCommander.
+	CommandName string
 
 	SubCommands  []SubCommand
 	RegisterHelp bool
@@ -153,6 +161,14 @@ func testSubCommanderTest(t *testing.T, sct *SubCommanderTest, tags ...interface
 	sc := sct.SubCommander
 	if sc == nil {
 		sc = &SubCommander{}
+	}
+
+	if sc.CommandName == "" {
+		if sct.CommandName != "" {
+			sc.CommandName = sct.CommandName
+		} else {
+			sc.CommandName = "command"
+		}
 	}
 
 	for _, subCommand := range sct.SubCommands {

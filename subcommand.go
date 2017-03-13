@@ -56,6 +56,11 @@ type SubCommand interface {
 //
 //Note that SubCommander is NOT safe for use with multiple goroutines.
 type SubCommander struct {
+	//CommandName is used in error and help output. It should be the name of the
+	//program that was invoked.
+	//It is set to os.Args[0] by NewSubCommander().
+	CommandName string
+
 	//GlobalFlags is a FlagSetter that is used for setting global flags for subcommands.
 	GlobalFlags FlagSetter
 
@@ -77,6 +82,12 @@ type SubCommander struct {
 
 	names   map[string]SubCommand
 	aliases map[string]SubCommand
+}
+
+func NewSubCommander() *SubCommander {
+	return &SubCommander{
+		CommandName: os.Args[0],
+	}
 }
 
 //RegisterHelp registers a help SubCommand that prints out help information about
@@ -174,7 +185,7 @@ func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string) error
 //ExecuteContextOut attempts to find and execute a registered SubCommand.
 //ctx will be passed along unaltered to the SubCommand's Execute() method.
 //args are the command line arguments to parse and use for SubCommand execution.
-//They should include everything after the command invoked (os.Args[1:]).
+//They should include all command line arguments including the program name.
 //out and outErr are the io.Writers to use for standard out and standard error
 //for SubCommand execution and help and error output.
 //
@@ -187,7 +198,7 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 		return
 	}
 
-	if epgf, ok := err.(ErrParsingGlobalArgs); ok {
+	if epgf, ok := err.(ParsingGlobalArgsError); ok {
 		if epgf == flag.ErrHelp {
 			fmt.Println("global flag error help")
 		} else {
@@ -197,19 +208,19 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 	}
 
 	if err == ErrUnsuppliedSubCommand {
-		fmt.Println("error unsupplied subcommand")
+		sc.printErrUnsuppliedSubCommand(outErr)
 		return
 	}
 
-	if _, ok := err.(ErrUnknownSubCommand); ok {
+	if _, ok := err.(UnknownSubCommandError); ok {
 		fmt.Println("error unknown subcommand")
 	}
 
-	if _, ok := err.(ErrParsingSubCommand); ok {
+	if _, ok := err.(ParsingSubCommandError); ok {
 		fmt.Println("error parsing subcommand")
 	}
 
-	if _, ok := err.(ErrExecutingSubCommand); ok {
+	if _, ok := err.(ExecutingSubCommandError); ok {
 		return
 	}
 
@@ -225,7 +236,7 @@ func (sc *SubCommander) executeContextOut(ctx context.Context, args []string, ou
 		sc.GlobalFlags.SetFlags(f)
 	}
 	if err := f.Parse(args); err != nil {
-		return nil, &ErrParsingGlobalArgs{err}
+		return nil, &ParsingGlobalArgsError{err}
 	}
 
 	args = f.Args()
@@ -237,7 +248,7 @@ func (sc *SubCommander) executeContextOut(ctx context.Context, args []string, ou
 
 	subCommand := sc.getSubCommand(name)
 	if subCommand == nil {
-		return nil, ErrUnknownSubCommand(name)
+		return nil, UnknownSubCommandError(name)
 	}
 
 	return subCommand, sc.executeSubCommand(ctx, f, subCommand, args, out, outErr)
@@ -265,19 +276,19 @@ func (sc *SubCommander) executeSubCommand(
 			return
 		}
 		if r := recover(); r != nil {
-			err = ErrParsingSubCommand{fmt.Errorf("%v", r)}
+			err = ParsingSubCommandError{fmt.Errorf("%v", r)}
 		}
 	}()
 
 	err = sc.parseSubCommandArgs(subCommand, args)
 	if err != nil {
-		err = ErrParsingSubCommand{err}
+		err = ParsingSubCommandError{err}
 		return
 	}
 
 	err = subCommand.Execute(ctx, out, outErr)
 	if err != nil {
-		err = &ErrExecutingSubCommand{err}
+		err = &ExecutingSubCommandError{err}
 	}
 
 	return
@@ -300,6 +311,44 @@ func (sc *SubCommander) parseSubCommandArgs(subCommand SubCommand, args []string
 	}
 
 	return nil
+}
+
+func (sc *SubCommander) printErrUnsuppliedSubCommand(out io.Writer) {
+	fmt.Fprintf(out, "%v\n\n", ErrUnsuppliedSubCommand)
+	fmt.Fprintf(out, UsageFormat, sc.CommandName)
+	fmt.Fprintf(out, " %v", sc.CommandName)
+
+	f := sc.globalFlagSet()
+	if countFlags(f) > 0 {
+		fmt.Fprintf(out, " %v", FormatArgument(GlobalOptionsName, true, true))
+	}
+
+	fmt.Fprintf(
+		out,
+		" %v %v %v\n",
+		FormatArgument(SubCommandName, false, false),
+		FormatArgument(ParametersName, true, true),
+		FormatArgument(SubCommandOptionsName, true, true),
+	)
+
+	availableSubCommandUsage := sc.getAvailableSubCommandUsage()
+	if len(availableSubCommandUsage) > 0 {
+		fmt.Fprintf(out, "\n%s\n", availableSubCommandUsage)
+	}
+}
+
+func (sc *SubCommander) globalFlagSet() *flag.FlagSet {
+	f := newFlagSet("")
+	if sc.GlobalFlags != nil {
+		sc.GlobalFlags.SetFlags(f)
+	}
+	return f
+}
+
+func (sc *SubCommander) getAvailableSubCommandUsage() string {
+	result := fmt.Sprintf(AvailableFormat, SubCommandsName)
+
+	return result
 }
 
 func parseSubCommandFlagsFirst(f *flag.FlagSet, subCommand SubCommand, args []string) error {
@@ -333,11 +382,11 @@ func parseSubCommandParametersFirst(f *flag.FlagSet, subCommand SubCommand, args
 		if err == flag.ErrHelp {
 			return err
 		}
-		return ErrFlagsAfterParameters(err.Error())
+		return FlagsAfterParametersError(err.Error())
 	}
 
 	if len(args) > 0 {
-		return ErrFlagsAfterParameters(strings.Join(args, ", "))
+		return FlagsAfterParametersError(strings.Join(args, ", "))
 	}
 
 	return subCommand.SetParameters(params)
@@ -381,6 +430,14 @@ func newFlagSet(name string) *flag.FlagSet {
 	return f
 }
 
+func countFlags(f *flag.FlagSet) int {
+	count := 0
+	f.VisitAll(func(_ *flag.Flag) {
+		count++
+	})
+	return count
+}
+
 type helpSubCommand struct {
 	sc *SubCommander
 
@@ -401,7 +458,7 @@ func (h *helpSubCommand) SetParameters(params []string) error {
 		return ErrInvalidParameters
 	}
 	if len(params) == 0 {
-		return &ErrRequiredParameterNotSet{
+		return &RequiredParameterNotSetError{
 			Name: SubCommandName,
 			Many: false,
 		}

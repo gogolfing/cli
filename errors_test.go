@@ -22,7 +22,7 @@ func TestErrRequiredParameterNotSet_Error(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		err := &ErrRequiredParameterNotSet{
+		err := &RequiredParameterNotSetError{
 			Name: test.name,
 			Many: test.many,
 		}
@@ -34,7 +34,7 @@ func TestErrRequiredParameterNotSet_Error(t *testing.T) {
 }
 
 func TestErrUnknownSubCommand_Error(t *testing.T) {
-	err := ErrUnknownSubCommand("this is an unknown sub-command")
+	err := UnknownSubCommandError("this is an unknown sub-command")
 
 	if result := err.Error(); result != `unknown sub_command "this is an unknown sub-command"` {
 		t.Fail()
@@ -42,7 +42,7 @@ func TestErrUnknownSubCommand_Error(t *testing.T) {
 }
 
 func TestErrFlagsAfterParameters(t *testing.T) {
-	err := ErrFlagsAfterParameters("error flag after parameters")
+	err := FlagsAfterParametersError("error flag after parameters")
 
 	if result := err.Error(); result != "flags present after parameters: error flag after parameters" {
 		t.Fail()
@@ -55,12 +55,12 @@ func TestIsExecutionError(t *testing.T) {
 		t.Fail()
 	}
 
-	err = &ErrExecutingSubCommand{fmt.Errorf("execution error")}
+	err = &ExecutingSubCommandError{fmt.Errorf("execution error")}
 	if !IsExecutionError(err) {
 		t.Fail()
 	}
 
-	err = ErrExecutingSubCommand{fmt.Errorf("execution error")}
+	err = ExecutingSubCommandError{fmt.Errorf("execution error")}
 	if !IsExecutionError(err) {
 		t.Fail()
 	}
