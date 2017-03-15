@@ -156,7 +156,7 @@ func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string) error
 //out and outErr are the io.Writers to use for standard out and standard error
 //for SubCommand execution and help and error output.
 //
-//
+//TODO
 func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, out, outErr io.Writer) (err error) {
 	var subCommand SubCommand = nil
 
@@ -165,33 +165,33 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 		return
 	}
 
-	if epgf, ok := err.(ParsingGlobalArgsError); ok {
-		if epgf == flag.ErrHelp {
-			fmt.Println("global flag error help")
+	if pgfe, ok := err.(*ParsingGlobalArgsError); ok {
+		if pgfe.error == flag.ErrHelp {
+			sc.printCommandError(outErr, nil, true)
 		} else {
-			fmt.Println("global flag other parsing failed")
+			sc.printCommandError(outErr, pgfe, true)
 		}
 		return
 	}
 
 	if err == ErrUnsuppliedSubCommand {
-		sc.printErrUnsuppliedSubCommand(outErr)
+		sc.printCommandError(outErr, err, false)
 		return
 	}
 
 	if _, ok := err.(UnknownSubCommandError); ok {
-		fmt.Println("error unknown subcommand")
-	}
-
-	if _, ok := err.(ParsingSubCommandError); ok {
-		fmt.Println("error parsing subcommand")
-	}
-
-	if _, ok := err.(ExecutingSubCommandError); ok {
+		sc.printCommandError(outErr, err, false)
 		return
 	}
 
-	fmt.Fprintf(ioutil.Discard, subCommand.Name())
+	if _, ok := err.(*ParsingSubCommandError); ok {
+		sc.printSubCommandError(outErr, err, subCommand)
+		return
+	}
+
+	if _, ok := err.(*ExecutingSubCommandError); ok {
+		return
+	}
 
 	return
 }
@@ -249,7 +249,7 @@ func (sc *SubCommander) executeSubCommand(
 
 	err = sc.parseSubCommandArgs(subCommand, args)
 	if err != nil {
-		err = ParsingSubCommandError{err}
+		err = &ParsingSubCommandError{err}
 		return
 	}
 
@@ -280,8 +280,19 @@ func (sc *SubCommander) parseSubCommandArgs(subCommand SubCommand, args []string
 	return nil
 }
 
-func (sc *SubCommander) printErrUnsuppliedSubCommand(out io.Writer) {
-	fmt.Fprintf(out, "%v\n\n", ErrUnsuppliedSubCommand)
+func (sc *SubCommander) printCommandError(out io.Writer, err error, globals bool) {
+	if err != nil {
+		fmt.Fprintf(out, "%v\n\n", err)
+	}
+
+	sc.printCommandUsage(out)
+	if globals {
+		sc.maybePrintGlobalOptionsUsage(out)
+	}
+	sc.maybePrintAvailableSubCommands(out)
+}
+
+func (sc *SubCommander) printCommandUsage(out io.Writer) {
 	fmt.Fprintf(out, "%s %s", Usage, sc.CommandName)
 
 	f := sc.globalFlagSet()
@@ -296,16 +307,23 @@ func (sc *SubCommander) printErrUnsuppliedSubCommand(out io.Writer) {
 		FormatArgument(ParametersName, true, true),
 		FormatArgument(SubCommandOptionsName, true, true),
 	)
+}
 
+func (sc *SubCommander) maybePrintGlobalOptionsUsage(out io.Writer) {
 	globalFlagsUsage := sc.getGlobalFlagsUsage()
 	if len(globalFlagsUsage) > 0 {
 		fmt.Fprintf(out, "\n%s\n", globalFlagsUsage)
 	}
+}
 
-	availableSubCommandUsage := sc.getAvailableSubCommandUsage()
-	if len(availableSubCommandUsage) > 0 {
-		fmt.Fprintf(out, "\n%s\n", availableSubCommandUsage)
+func (sc *SubCommander) maybePrintAvailableSubCommands(out io.Writer) {
+	availableSubCommandsUsage := sc.getAvailableSubCommandsUsage()
+	if len(availableSubCommandsUsage) > 0 {
+		fmt.Fprintf(out, "\n%s\n", availableSubCommandsUsage)
 	}
+}
+
+func (sc *SubCommander) printSubCommandError(out io.Writer, err error, subCommand SubCommand) {
 }
 
 func (sc *SubCommander) globalFlagSet() *flag.FlagSet {
@@ -317,7 +335,7 @@ func (sc *SubCommander) globalFlagSet() *flag.FlagSet {
 }
 
 func (sc *SubCommander) getGlobalFlagsUsage() string {
-	defaults := getFlagSetDefaults(sc.globalFlagSet())
+	defaults := strings.TrimRight(getFlagSetDefaults(sc.globalFlagSet()), "\n")
 	if len(defaults) == 0 {
 		return ""
 	}
@@ -325,19 +343,15 @@ func (sc *SubCommander) getGlobalFlagsUsage() string {
 	return fmt.Sprintf("%s:\n%s", GlobalOptionsName, defaults)
 }
 
-func (sc *SubCommander) getAvailableSubCommandUsage() string {
+func (sc *SubCommander) getAvailableSubCommandsUsage() string {
 	if len(sc.names) == 0 {
 		return ""
 	}
 
 	out := bytes.NewBuffer([]byte{})
-	fmt.Fprintf(out, "%s:\n", SubCommandsName)
+	fmt.Fprintf(out, "%s:", SubCommandsName)
 
-	names := make([]string, 0, len(sc.names))
-	for name := range sc.names {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := sc.sortedSubCommandNames()
 
 	allNameAliases := make([]string, 0, len(names))
 	for _, name := range names {
@@ -349,24 +363,42 @@ func (sc *SubCommander) getAvailableSubCommandUsage() string {
 		allNameAliases = append(allNameAliases, strings.Join(nameAliases, ", "))
 	}
 
-	max := 0
-	for _, nameAliases := range allNameAliases {
-		if len(nameAliases) > max {
-			max = len(nameAliases)
-		}
-	}
-	pad := 16
-	if max > pad {
-		pad = max + 4
-	}
-
+	pad := maxInt(16, maxLen(allNameAliases)+4)
 	for i, name := range names {
 		sc := sc.names[name]
 		nameAliases := allNameAliases[i]
-		fmt.Fprintf(out, "  %s%s%s\n", nameAliases, padRight(pad, nameAliases), sc.Synopsis())
+		fmt.Fprintf(out, "\n  %s%s%s", nameAliases, padRight(pad, nameAliases), sc.Synopsis())
 	}
 
 	return out.String()
+}
+
+func (sc *SubCommander) sortedSubCommandNames() []string {
+	names := make([]string, 0, len(sc.names))
+	for name := range sc.names {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func maxLen(values []string) int {
+	max := 0
+	for _, value := range values {
+		if l := len(value); l > max {
+			max = l
+		}
+	}
+	return max
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	} else if a < b {
+		return b
+	}
+	return a
 }
 
 func padRight(count int, value string) string {

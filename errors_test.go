@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestErrRequiredParameterNotSet_Error(t *testing.T) {
+func TestRequiredParameterNotSetError_Error(t *testing.T) {
 	oldFormatParameter := FormatParameter
 	FormatParameter = testFormatParameter
 	defer func() {
@@ -33,7 +33,7 @@ func TestErrRequiredParameterNotSet_Error(t *testing.T) {
 	}
 }
 
-func TestErrUnknownSubCommand_Error(t *testing.T) {
+func TestUnknownSubCommandError_Error(t *testing.T) {
 	err := UnknownSubCommandError("this is an unknown sub-command")
 
 	if result := err.Error(); result != `unknown sub_command "this is an unknown sub-command"` {
@@ -41,7 +41,7 @@ func TestErrUnknownSubCommand_Error(t *testing.T) {
 	}
 }
 
-func TestErrFlagsAfterParameters(t *testing.T) {
+func TestFlagsAfterParametersError_Error(t *testing.T) {
 	err := FlagsAfterParametersError("error flag after parameters")
 
 	if result := err.Error(); result != "flags present after parameters: error flag after parameters" {

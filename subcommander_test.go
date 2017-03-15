@@ -14,6 +14,11 @@ import (
 	"testing"
 )
 
+const (
+	SimpleUsage        = "usage: command <sub_command> [parameters...] [sub_command_options...]\n"
+	SimpleGlobalsUsage = "usage: command [global_options...] <sub_command> [parameters...] [sub_command_options...]\n"
+)
+
 var errExecute = errors.New("error executing")
 
 func TestSubCommander_RegisterHelp_RegistersWithNameAndAlaises(t *testing.T) {
@@ -82,7 +87,7 @@ func TestSubCommander_Execute_CallsExecuteContextOutCorrectly(t *testing.T) {
 	outErr.Close()
 
 	if outBytes, _ := ioutil.ReadFile(os.Stdout.Name()); string(outBytes) != "out" {
-		t.Fatalf("out = %v WANT %s", outBytes, "out")
+		t.Fatalf("out = %v WANT %s", string(outBytes), "out")
 	}
 	if outErrBytes, _ := ioutil.ReadFile(os.Stderr.Name()); string(outErrBytes) != "outErr" {
 		t.Fatalf("outErr = %s WANT %s", outErrBytes, "outErr")
@@ -92,19 +97,44 @@ func TestSubCommander_Execute_CallsExecuteContextOutCorrectly(t *testing.T) {
 	}
 }
 
-func TestSubCommander_ExecuteContextOut_ErrUnsuppliedSubCommmand(t *testing.T) {
+func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_Help(t *testing.T) {
+	sct := &SubCommanderTest{
+		Args:         strings.Fields("-h"),
+		OutErrString: SimpleUsage,
+		Err:          &ParsingGlobalArgsError{flag.ErrHelp},
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_OtherError(t *testing.T) {
+	errString := "flag provided but not defined: -other"
+
+	fs := NewStringsFlagSetter("value")
+	sct := &SubCommanderTest{
+		SubCommander: &SubCommander{
+			GlobalFlags: fs,
+		},
+		Args:         strings.Fields("-other 1234"),
+		OutErrString: errString + "\n\n" + SimpleGlobalsUsage + "\n" + GlobalOptionsName + ":\n" + getFlagSetterDefaults(fs),
+		Err:          &ParsingGlobalArgsError{errors.New(errString)},
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError(t *testing.T) {
 	prefix := ErrUnsuppliedSubCommand.Error() + "\n\n"
-	simpleUsage := "usage: command <sub_command> [parameters...] [sub_command_options...]\n"
 
 	tests := []*SubCommanderTest{
 		{
 			Args:         nil,
-			OutErrString: prefix + simpleUsage,
+			OutErrString: prefix + SimpleUsage,
 			Err:          ErrUnsuppliedSubCommand,
 		},
 		{
 			Args:         []string{},
-			OutErrString: prefix + simpleUsage,
+			OutErrString: prefix + SimpleUsage,
 			Err:          ErrUnsuppliedSubCommand,
 		},
 		func() *SubCommanderTest {
@@ -113,18 +143,119 @@ func TestSubCommander_ExecuteContextOut_ErrUnsuppliedSubCommmand(t *testing.T) {
 				SubCommander: &SubCommander{
 					GlobalFlags: fs,
 				},
-				Args: []string{"-value", "1234"},
-				OutErrString: prefix +
-					"usage: command [global_options...] <sub_command> [parameters...] [sub_command_options...]\n" +
-					"\n" + GlobalOptionsName + ":" +
-					"\n" + getFlagSetterDefaults(fs) + "\n",
-				Err: ErrUnsuppliedSubCommand,
+				Args:         []string{"-value", "1234"},
+				OutErrString: prefix + SimpleGlobalsUsage,
+				Err:          ErrUnsuppliedSubCommand,
 			}
 		}(),
 	}
 
 	testSubCommanderTests(t, tests)
 }
+
+func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError_PrintsAvailableSubCommandsCorrectly(t *testing.T) {
+	prefix := ErrUnsuppliedSubCommand.Error() + "\n\n"
+	subCommandListing :=
+		`  a               command a
+  b, b1, b2       command b`
+
+	sct := &SubCommanderTest{
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue:     "b",
+				AliasesValue:  []string{"b2", "b1"},
+				SynopsisValue: "command b",
+			},
+			&SubCommandStruct{
+				NameValue:     "a",
+				SynopsisValue: "command a",
+			},
+		},
+		Args:         nil,
+		OutErrString: prefix + SimpleUsage + "\n" + SubCommandsName + ":\n" + subCommandListing + "\n",
+		Err:          ErrUnsuppliedSubCommand,
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError_PrintsAvailableSubCommandsWithWideOutput(t *testing.T) {
+	prefix := ErrUnsuppliedSubCommand.Error() + "\n\n"
+	subCommandListing :=
+		"  a, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9    command a"
+
+	sct := &SubCommanderTest{
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue:     "a",
+				AliasesValue:  []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"},
+				SynopsisValue: "command a",
+			},
+		},
+		Args:         nil,
+		OutErrString: prefix + SimpleUsage + "\n" + SubCommandsName + ":\n" + subCommandListing + "\n",
+		Err:          ErrUnsuppliedSubCommand,
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_UnknownSubCommandError(t *testing.T) {
+	prefix := UnknownSubCommandError("foo").Error() + "\n\n"
+
+	sct := &SubCommanderTest{
+		Args:         strings.Fields("foo"),
+		OutErrString: prefix + SimpleUsage,
+		Err:          UnknownSubCommandError("foo"),
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_FlagsFirstError(t *testing.T) {
+	err := fmt.Errorf("this is my error")
+	// err := fmt.Errorf(t.Name())
+
+	sct := &SubCommanderTest{
+		SubCommander: &SubCommander{
+			ParameterFlagMode: ModeFlagsFirst,
+		},
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue: "sub",
+				SetParametersValue: func(params []string) error {
+					if !reflect.DeepEqual(params, strings.Fields("param1 -f 2")) {
+						t.Fatal("wrong parameters")
+					}
+					return err
+				},
+				ExecuteValue: NewExecuteFunc("out", "outErr", errExecute),
+			},
+		},
+		Args:         strings.Fields("sub param1 -f 2"),
+		OutErrString: "",
+		Err:          &ParsingSubCommandError{err},
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_ParametersFirstError(t *testing.T) {
+}
+
+func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_InterspersedError(t *testing.T) {
+}
+
+func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingParametersError(t *testing.T) {
+}
+
+//TODO works correctly with disallow globals option set
+//TODO erros with disallow globals option set
+//TODO works correctly with all three modes
+//TODO works correctly with alias
+//TODO works correctly with global option in sub command args
+//TODO help works
+//TODO list works
 
 func NewExecuteFunc(out, outErr string, err error) func(context.Context, io.Writer, io.Writer) error {
 	f := func(_ context.Context, outW, outErrW io.Writer) error {
