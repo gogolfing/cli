@@ -11,7 +11,7 @@ func (fsf FlagSetterFunc) SetFlags(f *flag.FlagSet) {
 func NewStringsFlagSetter(names ...string) FlagSetter {
 	return FlagSetterFunc(func(f *flag.FlagSet) {
 		for _, name := range names {
-			f.String(name, "default_"+name, "usage_"+name)
+			f.String(name, name+"_default", name+"_usage")
 		}
 	})
 }

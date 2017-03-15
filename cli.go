@@ -8,9 +8,7 @@ const DoubleMinus = "--"
 
 //Output values that affect error and help output.
 const (
-	UsageFormat = "Usage of %s:"
-
-	AvailableFormat = "Available %s:"
+	Usage = "usage:"
 
 	GlobalOptionsName = "global_options"
 
@@ -41,6 +39,7 @@ const (
 
 //FlagSetter allows implementations to receive values from flag.FlagSets while
 //argument parsing occurs.
+//Implementations should not retain references to f.
 type FlagSetter interface {
 	SetFlags(f *flag.FlagSet)
 }
@@ -48,7 +47,7 @@ type FlagSetter interface {
 func FormatArgument(name string, optional, many bool) string {
 	result := name
 	if many {
-		result += " ..."
+		result += "..."
 	}
 	if optional {
 		result = "[" + result + "]"

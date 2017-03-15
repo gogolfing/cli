@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -92,27 +93,34 @@ func TestSubCommander_Execute_CallsExecuteContextOutCorrectly(t *testing.T) {
 }
 
 func TestSubCommander_ExecuteContextOut_ErrUnsuppliedSubCommmand(t *testing.T) {
-	outErrString := "sub_command not supplied\n\n"
+	prefix := ErrUnsuppliedSubCommand.Error() + "\n\n"
+	simpleUsage := "usage: command <sub_command> [parameters...] [sub_command_options...]\n"
 
 	tests := []*SubCommanderTest{
 		{
 			Args:         nil,
-			OutErrString: outErrString,
+			OutErrString: prefix + simpleUsage,
 			Err:          ErrUnsuppliedSubCommand,
 		},
 		{
 			Args:         []string{},
-			OutErrString: outErrString,
+			OutErrString: prefix + simpleUsage,
 			Err:          ErrUnsuppliedSubCommand,
 		},
-		{
-			SubCommander: &SubCommander{
-				GlobalFlags: NewStringsFlagSetter("value"),
-			},
-			Args:         []string{"-value", "1234"},
-			OutErrString: outErrString,
-			Err:          ErrUnsuppliedSubCommand,
-		},
+		func() *SubCommanderTest {
+			fs := NewStringsFlagSetter("value")
+			return &SubCommanderTest{
+				SubCommander: &SubCommander{
+					GlobalFlags: fs,
+				},
+				Args: []string{"-value", "1234"},
+				OutErrString: prefix +
+					"usage: command [global_options...] <sub_command> [parameters...] [sub_command_options...]\n" +
+					"\n" + GlobalOptionsName + ":" +
+					"\n" + getFlagSetterDefaults(fs) + "\n",
+				Err: ErrUnsuppliedSubCommand,
+			}
+		}(),
 	}
 
 	testSubCommanderTests(t, tests)
@@ -232,4 +240,13 @@ func executeContextOut(sc *SubCommander, ctx context.Context, args []string) (*b
 
 func newOutputs() (*bytes.Buffer, *bytes.Buffer) {
 	return bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
+}
+
+func getFlagSetterDefaults(fs FlagSetter) string {
+	f := flag.NewFlagSet("", flag.ContinueOnError)
+	out := bytes.NewBuffer([]byte{})
+	fs.SetFlags(f)
+	f.SetOutput(out)
+	f.PrintDefaults()
+	return out.String()
 }

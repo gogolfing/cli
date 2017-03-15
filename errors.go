@@ -40,7 +40,7 @@ func (e *RequiredParameterNotSetError) Error() string {
 //during argument parsing.
 //Note that this error message will not be printed to output, it is simply a sentinel
 //value.
-var ErrUnsuppliedSubCommand = errors.New("sub-command not supplied")
+var ErrUnsuppliedSubCommand = fmt.Errorf("%s not supplied", SubCommandName)
 
 //UnknownSubCommandError is an error denoting the provided sub-command is not registered.
 type UnknownSubCommandError string
