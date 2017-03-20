@@ -19,22 +19,7 @@ const (
 	SubCommandsName       = "sub_commands"
 	SubCommandOptionsName = "sub_command_options"
 
-	NoParametersUsage = "there are no " + ParametersName
-)
-
-//ParameterFlagMode determines how arguments are parsed for SubCommands.
-type ParameterFlagMode int
-
-const (
-	//ModeInterspersed allows command parameters and flags to be mixed with eachother
-	//in their ordering.
-	ModeInterspersed ParameterFlagMode = iota
-
-	//ModeFlagsFirst requires all flag options to come before parameters.
-	ModeFlagsFirst
-
-	//ModeParametersFirst requires all parameters to come before flag options.
-	ModeParametersFirst
+	ArgumentSeparator = " | "
 )
 
 //FlagSetter allows implementations to receive values from flag.FlagSets while
@@ -44,7 +29,7 @@ type FlagSetter interface {
 	SetFlags(f *flag.FlagSet)
 }
 
-func FormatArgument(name string, optional, many bool) string {
+var FormatArgument = func(name string, optional, many bool) string {
 	result := name
 	if many {
 		result += "..."

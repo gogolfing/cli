@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -39,13 +40,6 @@ type SubCommander struct {
 	//while true would not. A true value would require the above ["-global2" "2"]
 	//to come before "sub-command" in the argument slice.
 	DisallowGlobalFlagsWithSubCommand bool
-
-	//ParameterFlagMode is the mode used when parsing sub-command flags (and the
-	//possible inclusion of global flags depending on the value of
-	//DisallowGlobalFlagsWithsubCommand) and parameters.
-	//
-	//See the ParameterFlagMode type for more details. It is set to
-	ParameterFlagMode
 
 	names   map[string]SubCommand
 	aliases map[string]SubCommand
@@ -159,7 +153,6 @@ func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string) error
 //TODO
 func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, out, outErr io.Writer) (err error) {
 	var subCommand SubCommand = nil
-
 	subCommand, err = sc.executeContextOut(ctx, args, out, outErr)
 	if err == nil {
 		return
@@ -184,8 +177,14 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 		return
 	}
 
-	if _, ok := err.(*ParsingSubCommandError); ok {
-		sc.printSubCommandError(outErr, err, subCommand)
+	if psce, ok := err.(*ParsingSubCommandError); ok {
+		if psce.error == flag.ErrHelp {
+			printSubCommandHeaderDescription(outErr, subCommand)
+			fmt.Fprintf(outErr, "%s", "\n\n")
+			sc.printSubCommandError(outErr, nil, subCommand)
+		} else {
+			sc.printSubCommandError(outErr, err, subCommand)
+		}
 		return
 	}
 
@@ -268,16 +267,12 @@ func (sc *SubCommander) parseSubCommandArgs(subCommand SubCommand, args []string
 		sc.GlobalFlags.SetFlags(f)
 	}
 
-	switch sc.ParameterFlagMode {
-	case ModeFlagsFirst:
-		return parseSubCommandFlagsFirst(f, subCommand, args)
-	case ModeParametersFirst:
-		return parseSubCommandParametersFirst(f, subCommand, args)
-	default:
-		return parseSubCommandInterspersed(f, subCommand, args)
+	params, err := ParseArgumentsInterspersed(f, args)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	return subCommand.SetParameters(params)
 }
 
 func (sc *SubCommander) printCommandError(out io.Writer, err error, globals bool) {
@@ -286,6 +281,7 @@ func (sc *SubCommander) printCommandError(out io.Writer, err error, globals bool
 	}
 
 	sc.printCommandUsage(out)
+
 	if globals {
 		sc.maybePrintGlobalOptionsUsage(out)
 	}
@@ -295,18 +291,15 @@ func (sc *SubCommander) printCommandError(out io.Writer, err error, globals bool
 func (sc *SubCommander) printCommandUsage(out io.Writer) {
 	fmt.Fprintf(out, "%s %s", Usage, sc.CommandName)
 
-	f := sc.globalFlagSet()
-	if countFlags(f) > 0 {
+	if sc.hasGlobalOptions() {
 		fmt.Fprintf(out, " %v", FormatArgument(GlobalOptionsName, true, true))
 	}
 
-	fmt.Fprintf(
-		out,
-		" %v %v %v\n",
-		FormatArgument(SubCommandName, false, false),
-		FormatArgument(ParametersName, true, true),
-		FormatArgument(SubCommandOptionsName, true, true),
-	)
+	fmt.Fprintf(out, " %v", FormatArgument(SubCommandName, false, false))
+
+	sc.maybePrintSubCommandLineUsage(out, nil)
+
+	fmt.Fprintln(out)
 }
 
 func (sc *SubCommander) maybePrintGlobalOptionsUsage(out io.Writer) {
@@ -324,6 +317,107 @@ func (sc *SubCommander) maybePrintAvailableSubCommands(out io.Writer) {
 }
 
 func (sc *SubCommander) printSubCommandError(out io.Writer, err error, subCommand SubCommand) {
+	if err != nil {
+		if err == flag.ErrHelp {
+			printSubCommandHeaderDescription(out, subCommand)
+		} else {
+			fmt.Fprintf(out, "%v", err)
+		}
+		fmt.Fprintf(out, "%s", "\n\n")
+	}
+
+	fmt.Fprintf(out, "%s %s %s", Usage, "...", subCommand.Name())
+
+	sc.maybePrintSubCommandLineUsage(out, subCommand)
+
+	fmt.Fprintln(out)
+
+	hasGlobalOptions, hasSubCommandOptions, hasParameters := sc.getSubCommandUsageStats(subCommand)
+	if hasGlobalOptions && !sc.DisallowGlobalFlagsWithSubCommand {
+		sc.maybePrintGlobalOptionsUsage(out)
+	}
+	if hasSubCommandOptions {
+		sc.maybePrintSubCommandOptionsUsage(out, subCommand)
+	}
+	if hasParameters {
+		sc.maybePrintParameters(out, subCommand)
+	}
+}
+
+func (sc *SubCommander) maybePrintSubCommandOptionsUsage(out io.Writer, subCommand SubCommand) {
+	fs := newFlagSet(subCommand.Name())
+	subCommand.SetFlags(fs)
+	defaults := getFlagSetDefaults(fs)
+	if len(defaults) > 0 {
+		fmt.Fprintf(out, "\n%s:\n%s\n", SubCommandOptionsName, defaults)
+	}
+}
+
+func (sc *SubCommander) maybePrintParameters(out io.Writer, subCommand SubCommand) {
+	params, usage := subCommand.ParameterUsage()
+
+	result := FormatParameters(params, FormatParameter)
+	if len(usage) > 0 {
+		if len(result) > 0 {
+			result += "\n"
+		}
+		result += usage
+	}
+
+	if len(result) > 0 {
+		fmt.Fprintf(out, "\n%s: %s\n", ParametersName, result)
+	}
+}
+
+func (sc *SubCommander) maybePrintSubCommandLineUsage(out io.Writer, subCommand SubCommand) {
+	subCommandLineUsage := sc.getSubCommandLineUsage(subCommand)
+	if len(subCommandLineUsage) > 0 {
+		fmt.Fprintf(out, " %s", subCommandLineUsage)
+	}
+}
+
+func (sc *SubCommander) getSubCommandLineUsage(subCommand SubCommand) string {
+	hasGlobalOptions, hasSubCommandOptions, hasParameters := sc.getSubCommandUsageStats(subCommand)
+
+	args := []string{}
+	if hasGlobalOptions && !sc.DisallowGlobalFlagsWithSubCommand {
+		args = append(args, GlobalOptionsName)
+	}
+	if hasSubCommandOptions {
+		args = append(args, SubCommandOptionsName)
+	}
+	if hasParameters {
+		args = append(args, ParametersName)
+	}
+
+	if len(args) == 0 {
+		return ""
+	}
+
+	joined := strings.Join(args, ArgumentSeparator)
+	if len(args) == 1 {
+		return FormatArgument(joined, true, true)
+	}
+	return FormatArgument(FormatArgument(joined, true, false), true, true)
+}
+
+func (sc *SubCommander) getSubCommandUsageStats(subCommand SubCommand) (hasGlobalOptions, hasSubCommandOptions, hasParameters bool) {
+	hasGlobalOptions = sc.hasGlobalOptions()
+	hasSubCommandOptions = true
+	hasParameters = true
+
+	if subCommand != nil {
+		params, _ := subCommand.ParameterUsage()
+		hasParameters = len(params) > 0
+
+		hasSubCommandOptions = subCommandFlagCount(subCommand) > 0
+	}
+
+	return
+}
+
+func (sc *SubCommander) hasGlobalOptions() bool {
+	return countFlags(sc.globalFlagSet()) > 0
 }
 
 func (sc *SubCommander) globalFlagSet() *flag.FlagSet {
@@ -335,7 +429,7 @@ func (sc *SubCommander) globalFlagSet() *flag.FlagSet {
 }
 
 func (sc *SubCommander) getGlobalFlagsUsage() string {
-	defaults := strings.TrimRight(getFlagSetDefaults(sc.globalFlagSet()), "\n")
+	defaults := getFlagSetDefaults(sc.globalFlagSet())
 	if len(defaults) == 0 {
 		return ""
 	}
@@ -355,15 +449,14 @@ func (sc *SubCommander) getAvailableSubCommandsUsage() string {
 
 	allNameAliases := make([]string, 0, len(names))
 	for _, name := range names {
-		sc := sc.names[name]
-		nameAliases := []string{name}
-		nameAliases = append(nameAliases, sc.Aliases()...)
-		sort.Strings(nameAliases[1:])
-
-		allNameAliases = append(allNameAliases, strings.Join(nameAliases, ", "))
+		subCommand := sc.names[name]
+		allNameAliases = append(
+			allNameAliases,
+			getSortedJoinedSubCommandNameAliases(subCommand),
+		)
 	}
 
-	pad := maxInt(16, maxLen(allNameAliases)+4)
+	pad := int(math.Max(16, float64(maxLen(allNameAliases)+4)))
 	for i, name := range names {
 		sc := sc.names[name]
 		nameAliases := allNameAliases[i]
@@ -371,6 +464,24 @@ func (sc *SubCommander) getAvailableSubCommandsUsage() string {
 	}
 
 	return out.String()
+}
+
+func printSubCommandHeaderDescription(out io.Writer, subCommand SubCommand) {
+	fmt.Fprintf(
+		out,
+		"%s",
+		getSortedJoinedSubCommandNameAliases(subCommand),
+	)
+	if description := subCommand.Description(); len(description) > 0 {
+		fmt.Fprintf(out, " - %s", description)
+	}
+}
+
+func getSortedJoinedSubCommandNameAliases(subCommand SubCommand) string {
+	result := []string{subCommand.Name()}
+	result = append(result, subCommand.Aliases()...)
+	sort.Strings(result[1:])
+	return strings.Join(result, ", ")
 }
 
 func (sc *SubCommander) sortedSubCommandNames() []string {
@@ -392,15 +503,6 @@ func maxLen(values []string) int {
 	return max
 }
 
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	} else if a < b {
-		return b
-	}
-	return a
-}
-
 func padRight(count int, value string) string {
 	count = count - len(value)
 	result := make([]byte, count)
@@ -408,74 +510,6 @@ func padRight(count int, value string) string {
 		result[i] = ' '
 	}
 	return string(result)
-}
-
-func parseSubCommandFlagsFirst(f *flag.FlagSet, subCommand SubCommand, args []string) error {
-	if err := f.Parse(args); err != nil {
-		return err
-	}
-	return subCommand.SetParameters(f.Args())
-}
-
-func parseSubCommandParametersFirst(f *flag.FlagSet, subCommand SubCommand, args []string) error {
-	var err error = nil
-	params := []string{}
-
-	for err == nil && f.NFlag() == 0 && len(args) > 0 {
-		err = f.Parse(args)
-		if err != nil {
-			continue
-		}
-		if didStopAfterDoubleMinus(args, f.Args()) {
-			params = append(params, f.Args()...)
-			args = args[len(args):]
-			continue
-		}
-		args = f.Args()
-		if len(args) > 0 {
-			params = append(params, args[0])
-			args = args[1:]
-		}
-	}
-	if err != nil {
-		if err == flag.ErrHelp {
-			return err
-		}
-		return FlagsAfterParametersError(err.Error())
-	}
-
-	if len(args) > 0 {
-		return FlagsAfterParametersError(strings.Join(args, ", "))
-	}
-
-	return subCommand.SetParameters(params)
-}
-
-func parseSubCommandInterspersed(f *flag.FlagSet, subCommand SubCommand, args []string) error {
-	var err error = nil
-	params := []string{}
-
-	for err == nil && len(args) > 0 {
-		err = f.Parse(args)
-		if err != nil {
-			continue
-		}
-		if didStopAfterDoubleMinus(args, f.Args()) {
-			params = append(params, f.Args()...)
-			args = args[len(args):]
-			continue
-		}
-		args = f.Args()
-		if len(args) > 0 {
-			params = append(params, args[0])
-			args = args[1:]
-		}
-	}
-	if err != nil {
-		return err
-	}
-
-	return subCommand.SetParameters(params)
 }
 
 func didStopAfterDoubleMinus(args, remaining []string) bool {
@@ -501,27 +535,27 @@ func getFlagSetDefaults(f *flag.FlagSet) string {
 	out := bytes.NewBuffer([]byte{})
 	f.SetOutput(out)
 	f.PrintDefaults()
-	return out.String()
+	return strings.TrimRight(out.String(), "\n")
 }
 
 type helpSubCommand struct {
 	sc *SubCommander
 
-	helpCommandName string
+	helpSubCommandName string
 }
 
 func (h *helpSubCommand) ParameterUsage() ([]*Parameter, string) {
 	params := []*Parameter{
 		{Name: SubCommandName, Optional: false, Many: false},
 	}
-	usage := fmt.Sprintf("%v is the %v to provide help for", FormatParameterName(params[0].Name), SubCommandName)
+	usage := fmt.Sprintf("%v is the %v to provide help for", FormatParameter(params[0]), SubCommandName)
 
 	return params, usage
 }
 
 func (h *helpSubCommand) SetParameters(params []string) error {
 	if len(params) > 1 {
-		return ErrInvalidParameters
+		return ErrTooManyParameters
 	}
 	if len(params) == 0 {
 		return &RequiredParameterNotSetError{
@@ -530,13 +564,21 @@ func (h *helpSubCommand) SetParameters(params []string) error {
 		}
 	}
 
-	h.helpCommandName = params[0]
+	h.helpSubCommandName = params[0]
 	return nil
 }
 
-func (h *helpSubCommand) Execute(_ context.Context, out, _ io.Writer) error {
-	_, err := fmt.Fprintln(out, "help execute unimplemented")
-	return err
+func (h *helpSubCommand) Execute(_ context.Context, out, outErr io.Writer) error {
+	subCommand := h.sc.getSubCommand(h.helpSubCommandName)
+	if subCommand == nil {
+		err := UnknownSubCommandError(h.helpSubCommandName)
+		h.sc.printCommandError(outErr, err, false)
+		return err
+	}
+
+	h.sc.printSubCommandError(out, flag.ErrHelp, subCommand)
+
+	return nil
 }
 
 type listSubCommand struct {
@@ -544,17 +586,17 @@ type listSubCommand struct {
 }
 
 func (l *listSubCommand) ParameterUsage() ([]*Parameter, string) {
-	return nil, NoParametersUsage
+	return nil, ""
 }
 
 func (l *listSubCommand) SetParameters(params []string) error {
-	if len(params) != 0 {
-		return fmt.Errorf(NoParametersUsage)
+	if len(params) > 0 {
+		return ErrTooManyParameters
 	}
 	return nil
 }
 
 func (l *listSubCommand) Execute(_ context.Context, out, _ io.Writer) error {
-	_, err := fmt.Fprintln(out, "list execute unimplemented")
-	return err
+	fmt.Fprintf(out, "%s\n", l.sc.getAvailableSubCommandsUsage())
+	return nil
 }

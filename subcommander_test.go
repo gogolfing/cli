@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	SimpleUsage        = "usage: command <sub_command> [parameters...] [sub_command_options...]\n"
-	SimpleGlobalsUsage = "usage: command [global_options...] <sub_command> [parameters...] [sub_command_options...]\n"
+	SimpleUsage        = "usage: command <sub_command> [[sub_command_options | parameters]...]\n"
+	SimpleGlobalsUsage = "usage: command [global_options...] <sub_command> [[global_options | sub_command_options | parameters]...]\n"
 )
 
 var errExecute = errors.New("error executing")
@@ -116,7 +116,7 @@ func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_OtherError(t *tes
 			GlobalFlags: fs,
 		},
 		Args:         strings.Fields("-other 1234"),
-		OutErrString: errString + "\n\n" + SimpleGlobalsUsage + "\n" + GlobalOptionsName + ":\n" + getFlagSetterDefaults(fs),
+		OutErrString: errString + "\n\n" + SimpleGlobalsUsage + "\n" + GlobalOptionsName + ":\n" + getFlagSetterDefaults(fs) + "\n",
 		Err:          &ParsingGlobalArgsError{errors.New(errString)},
 	}
 
@@ -212,50 +212,281 @@ func TestSubCommander_ExecuteContextOut_UnknownSubCommandError(t *testing.T) {
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_FlagsFirstError(t *testing.T) {
-	err := fmt.Errorf("this is my error")
-	// err := fmt.Errorf(t.Name())
+func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_FlagErrHelP(t *testing.T) {
+	err := flag.ErrHelp
 
 	sct := &SubCommanderTest{
-		SubCommander: &SubCommander{
-			ParameterFlagMode: ModeFlagsFirst,
-		},
 		SubCommands: []SubCommand{
 			&SubCommandStruct{
 				NameValue: "sub",
-				SetParametersValue: func(params []string) error {
-					if !reflect.DeepEqual(params, strings.Fields("param1 -f 2")) {
-						t.Fatal("wrong parameters")
-					}
-					return err
-				},
-				ExecuteValue: NewExecuteFunc("out", "outErr", errExecute),
 			},
 		},
-		Args:         strings.Fields("sub param1 -f 2"),
-		OutErrString: "",
+		Args:         strings.Fields("sub -h"),
+		OutErrString: "sub" + "\n\n" + Usage + " ... sub" + "\n",
 		Err:          &ParsingSubCommandError{err},
 	}
 
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_ParametersFirstError(t *testing.T) {
-}
-
-func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_InterspersedError(t *testing.T) {
-}
-
 func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingParametersError(t *testing.T) {
+	err := fmt.Errorf(t.Name())
+
+	sct := &SubCommanderTest{
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue: "a",
+				SetParametersValue: func(params []string) error {
+					if !reflect.DeepEqual(params, []string{"foo", "bar"}) {
+						t.Fatal("wrong parameters")
+					}
+					return err
+				},
+				ParameterUsageValue: func() ([]*Parameter, string) {
+					return []*Parameter{
+						&Parameter{
+							Name:     "PV",
+							Optional: true,
+							Many:     false,
+						},
+					}, "extra parameter usage"
+				},
+			},
+		},
+		Args: strings.Fields("a foo bar"),
+		OutErrString: err.Error() + "\n\n" + "usage: ... a [parameters...]" + "\n\n" +
+			"parameters: [PV]" + "\n" + "extra parameter usage" + "\n",
+		Err: &ParsingSubCommandError{err},
+	}
+
+	testSubCommanderTest(t, sct)
 }
 
-//TODO works correctly with disallow globals option set
-//TODO erros with disallow globals option set
-//TODO works correctly with all three modes
-//TODO works correctly with alias
-//TODO works correctly with global option in sub command args
-//TODO help works
-//TODO list works
+func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithDisallowGlobalOptionsSet(t *testing.T) {
+	gfs := NewStringsFlagSetter("g1")
+	sfs := NewStringsFlagSetter("s1")
+
+	sct := &SubCommanderTest{
+		SubCommander: &SubCommander{
+			GlobalFlags:                       gfs,
+			DisallowGlobalFlagsWithSubCommand: true,
+		},
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue:  "sub",
+				FlagSetter: sfs,
+			},
+		},
+		Args: strings.Fields("-g1 foo sub -s1 bar"),
+		Err:  nil,
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_ErrorsWithDisallowGlobalsAndGlobalOptionSetAfterSubCommand(t *testing.T) {
+	gfs := NewStringsFlagSetter("g1")
+	sfs := NewStringsFlagSetter("s1")
+	err := fmt.Errorf("flag provided but not defined: %v", "-g1")
+
+	sct := &SubCommanderTest{
+		SubCommander: &SubCommander{
+			GlobalFlags:                       gfs,
+			DisallowGlobalFlagsWithSubCommand: true,
+		},
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue:  "sub",
+				FlagSetter: sfs,
+			},
+		},
+		Args: strings.Fields("sub -g1 foo -s1 bar"),
+		OutErrString: err.Error() + "\n\n" + Usage + " ... sub [sub_command_options...]" + "\n\n" +
+			SubCommandOptionsName + ":\n" + getFlagSetterDefaults(sfs) + "\n",
+		Err: &ParsingSubCommandError{err},
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithAlias(t *testing.T) {
+	sct := &SubCommanderTest{
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue:    "foo",
+				AliasesValue: []string{"bar"},
+				ExecuteValue: NewExecuteFunc("foo bar", "", nil),
+			},
+		},
+		Args:      strings.Fields("bar"),
+		OutString: "foo bar",
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubCommandAndCorrectOutputsAndCorrectErrorHappyPath(t *testing.T) {
+	gfs := &SimpleFlagSetter{Suffix: "1"}
+	sfs := &SimpleFlagSetter{Suffix: "2"}
+
+	executeCalled := false
+	setParametersCalled := false
+	ctx := context.WithValue(context.Background(), 0, 1)
+	err := fmt.Errorf("this is an error")
+
+	sct := &SubCommanderTest{
+		SubCommander: &SubCommander{
+			GlobalFlags: gfs,
+		},
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue:        "sub",
+				AliasesValue:     []string{"alias"},
+				SynopsisValue:    "synopsis",
+				DescriptionValue: "description",
+				FlagSetter:       sfs,
+				ParameterUsageValue: func() ([]*Parameter, string) {
+					return []*Parameter{
+						&Parameter{
+							Name:     "p1",
+							Optional: false,
+							Many:     false,
+						},
+						&Parameter{
+							Name:     "p2",
+							Optional: true,
+							Many:     true,
+						},
+					}, "extra parameter usage"
+				},
+				SetParametersValue: func(params []string) error {
+					setParametersCalled = true
+					if !reflect.DeepEqual(params, []string{"foo", "bar"}) {
+						t.Fatal("wrong parameters set")
+					}
+					return nil
+				},
+				ExecuteValue: func(actualCtx context.Context, out, outErr io.Writer) error {
+					executeCalled = true
+					if actualCtx != ctx {
+						t.Error("did not receive correct context in execute method")
+					}
+					fmt.Fprintf(out, "out")
+					fmt.Fprintf(outErr, "outErr")
+					return err
+				},
+			},
+		},
+		Context:      ctx,
+		Args:         strings.Fields("-int1 1029 -string1 whoami sub -string2 cli foo -bool2 bar"),
+		OutString:    "out",
+		OutErrString: "outErr",
+		Err:          &ExecutingSubCommandError{err},
+	}
+
+	testSubCommanderTest(t, sct)
+
+	if !executeCalled {
+		t.Error("Execute() should have been called")
+	}
+	if !setParametersCalled {
+		t.Error("SetParameters() should have been called")
+	}
+	if !reflect.DeepEqual(gfs, &SimpleFlagSetter{Suffix: "1", Int: 1029, String: "whoami", Bool: false}) {
+		t.Error("global flags were not set correctly")
+	}
+	if !reflect.DeepEqual(sfs, &SimpleFlagSetter{Suffix: "2", Int: 0, String: "cli", Bool: true}) {
+		t.Error("sub-command flags were not set correctly")
+	}
+}
+
+func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorParsingSubCommandParameters(t *testing.T) {
+	formattedParameter := FormatParameter(&Parameter{Name: SubCommandName})
+	outErrStringSuffix := "\n\n" + Usage + " ... help [parameters...]" +
+		"\n\n" + ParametersName + ": " + formattedParameter + "\n" +
+		formattedParameter + " is the " + SubCommandName + " to provide help for" + "\n"
+
+	tests := []struct {
+		args []string
+		err  error
+	}{
+		{
+			args: strings.Fields("help"),
+			err:  &RequiredParameterNotSetError{Name: SubCommandName},
+		},
+		{
+			args: strings.Fields("help sub another"),
+			err:  ErrTooManyParameters,
+		},
+	}
+	for _, test := range tests {
+		sct := &SubCommanderTest{
+			RegisterHelp: true,
+			Args:         test.args,
+			OutErrString: test.err.Error() + outErrStringSuffix,
+			Err:          &ParsingSubCommandError{test.err},
+		}
+
+		testSubCommanderTest(t, sct)
+	}
+
+}
+
+func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorWithUnknownSubCommand(t *testing.T) {
+	err := UnknownSubCommandError("sub")
+
+	sct := &SubCommanderTest{
+		RegisterHelp: true,
+		Args:         strings.Fields("help sub"),
+		OutErrString: err.Error() + "\n\n" + SimpleUsage + "\n" + SubCommandsName + ":" + "\n" +
+			"  " + "help            Prints help information for a sub_command" + "\n",
+		Err: &ExecutingSubCommandError{err},
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithRegisteredHelpSubCommand(t *testing.T) {
+	sct := &SubCommanderTest{
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue: "a",
+			},
+			&SubCommandStruct{
+				NameValue:        "sub",
+				DescriptionValue: "sub_description",
+			},
+		},
+		RegisterHelp: true,
+		Args:         strings.Fields("help sub"),
+		OutString:    "sub - sub_description" + "\n\n" + Usage + " ... sub" + "\n",
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_SubCommandRegisteredListErrorParsingSubCommandParameters(t *testing.T) {
+	err := ErrTooManyParameters
+
+	sct := &SubCommanderTest{
+		RegisterList: true,
+		Args:         strings.Fields("list another"),
+		OutErrString: err.Error() + "\n\n" + Usage + " ... list" + "\n",
+		Err:          &ParsingSubCommandError{err},
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithRegsiteredListSubCommand(t *testing.T) {
+	sct := &SubCommanderTest{
+		RegisterList: true,
+		Args:         strings.Fields("list"),
+		OutString:    SubCommandsName + ":" + "\n" + "  list            Prints available sub_commands" + "\n",
+	}
+
+	testSubCommanderTest(t, sct)
+}
 
 func NewExecuteFunc(out, outErr string, err error) func(context.Context, io.Writer, io.Writer) error {
 	f := func(_ context.Context, outW, outErrW io.Writer) error {
@@ -268,9 +499,6 @@ func NewExecuteFunc(out, outErr string, err error) func(context.Context, io.Writ
 
 type SubCommanderTest struct {
 	*SubCommander
-
-	//CommandName is set here as a convenience to setting it on SubCommander.
-	CommandName string
 
 	SubCommands  []SubCommand
 	RegisterHelp bool
@@ -303,11 +531,7 @@ func testSubCommanderTest(t *testing.T, sct *SubCommanderTest, tags ...interface
 	}
 
 	if sc.CommandName == "" {
-		if sct.CommandName != "" {
-			sc.CommandName = sct.CommandName
-		} else {
-			sc.CommandName = "command"
-		}
+		sc.CommandName = "command"
 	}
 
 	for _, subCommand := range sct.SubCommands {
@@ -379,5 +603,5 @@ func getFlagSetterDefaults(fs FlagSetter) string {
 	fs.SetFlags(f)
 	f.SetOutput(out)
 	f.PrintDefaults()
-	return out.String()
+	return strings.TrimRight(out.String(), "\n")
 }

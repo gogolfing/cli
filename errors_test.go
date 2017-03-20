@@ -41,14 +41,6 @@ func TestUnknownSubCommandError_Error(t *testing.T) {
 	}
 }
 
-func TestFlagsAfterParametersError_Error(t *testing.T) {
-	err := FlagsAfterParametersError("error flag after parameters")
-
-	if result := err.Error(); result != "flags present after parameters: error flag after parameters" {
-		t.Fail()
-	}
-}
-
 func TestIsExecutionError(t *testing.T) {
 	err := fmt.Errorf("not an execution error")
 	if IsExecutionError(err) {

@@ -31,14 +31,7 @@ func FormatParameters(params []*Parameter, format func(p *Parameter) string) str
 //
 //This value may be changed to affect the output of this package.
 var FormatParameter = func(p *Parameter) string {
-	result := FormatParameterName(p.Name)
-	if p.Many {
-		result += "..."
-	}
-	if p.Optional {
-		result = "[" + result + "]"
-	}
-	return result
+	return FormatArgument(FormatParameterName(p.Name), p.Optional, p.Many)
 }
 
 //FormatParameterName returns a string representation of a Parameter name appropriate

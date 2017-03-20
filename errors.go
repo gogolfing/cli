@@ -61,14 +61,9 @@ type ParsingSubCommandError struct {
 	error
 }
 
-//FlagsAfterParametersError is an error denoting flags were parsed after the parameter
-//arguments. Note that this error will be used only with specific ParameterFlagModes.
-type FlagsAfterParametersError string
-
-//Error provides the error implementation.
-func (e FlagsAfterParametersError) Error() string {
-	return fmt.Sprintf("flags present after %v: %v", ParametersName, string(e))
-}
+//ErrTooManyParameters is a sentinel value that clients can use to signal that
+//too many parameters were provided to a ParameterSetter.
+var ErrTooManyParameters = fmt.Errorf("too many parameters")
 
 //ExecutingSubCommandError is an error wrapper denoting that executing a sub-command
 //failed.

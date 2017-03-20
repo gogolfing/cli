@@ -15,3 +15,17 @@ func NewStringsFlagSetter(names ...string) FlagSetter {
 		}
 	})
 }
+
+type SimpleFlagSetter struct {
+	Suffix string
+
+	Int    int
+	String string
+	Bool   bool
+}
+
+func (sfs *SimpleFlagSetter) SetFlags(f *flag.FlagSet) {
+	f.IntVar(&sfs.Int, "int"+sfs.Suffix, sfs.Int, "int_usage")
+	f.StringVar(&sfs.String, "string"+sfs.Suffix, sfs.String, "string_usage")
+	f.BoolVar(&sfs.Bool, "bool"+sfs.Suffix, sfs.Bool, "bool_usage")
+}

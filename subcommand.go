@@ -6,6 +6,10 @@ import (
 )
 
 //SubCommand defines the options for a sub-command to be executed by a SubCommander.
+//
+//The methods of this interface (except SetParameters and Execute) may be called
+//multiple times to obtain help and error output when needed. These methods should
+//be idempotent.
 type SubCommand interface {
 	//Name returns the name of the SubCommand.
 	//Names must not overlap with other SubCommand Name()s or Aliases() in the
@@ -44,6 +48,8 @@ type SubCommand interface {
 
 	//SetParameters allows SubCommands to receive parameter arguments during argument
 	//parsing.
+	//An error should be returned if values cannot be correctly parsed as parameters
+	//expected by this SubCommand.
 	//Implementations should not retain references to values.
 	SetParameters(values []string) error
 
@@ -51,4 +57,10 @@ type SubCommand interface {
 	//A non-nil return value indicates the execution failed and that error will
 	//be process by a SubCommander.
 	Execute(ctx context.Context, out, outErr io.Writer) error
+}
+
+func subCommandFlagCount(subCommand SubCommand) int {
+	f := newFlagSet(subCommand.Name())
+	subCommand.SetFlags(f)
+	return countFlags(f)
 }

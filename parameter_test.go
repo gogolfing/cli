@@ -12,11 +12,11 @@ func TestFormatParameter(t *testing.T) {
 	}{
 		{
 			&Parameter{Name: "one", Optional: false, Many: false},
-			"ONE",
+			"<ONE>",
 		},
 		{
 			&Parameter{Name: "one", Optional: false, Many: true},
-			"ONE...",
+			"<ONE...>",
 		},
 		{
 			&Parameter{Name: "one", Optional: true, Many: false},

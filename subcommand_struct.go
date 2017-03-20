@@ -23,8 +23,8 @@ type SubCommandStruct struct {
 	//DescriptionValue is returned from SubCommand's Description() method.
 	DescriptionValue string
 
-	//SetFlagsValue is used as the SubCommand's implementation if not nil.
-	SetFlagsValue func(*flag.FlagSet)
+	//FlagSetter is used as the SubCommand's implementation for SetFlags if not nil.
+	FlagSetter
 
 	//ParameterUsageValue is used as the SubCommand's implementation if not nil.
 	ParameterUsageValue func() ([]*Parameter, string)
@@ -56,10 +56,10 @@ func (scs *SubCommandStruct) Description() string {
 	return scs.DescriptionValue
 }
 
-//SetFlags calls scs.SetFlagsValue(f) if the field is not nil.
+//SetFlags delegates to scs.FlagSetter if the field is not nil.
 func (scs *SubCommandStruct) SetFlags(f *flag.FlagSet) {
-	if scs.SetFlagsValue != nil {
-		scs.SetFlagsValue(f)
+	if scs.FlagSetter != nil {
+		scs.FlagSetter.SetFlags(f)
 	}
 }
 
