@@ -1,9 +1,11 @@
-package cli
+package subcommand
 
 import (
 	"context"
 	"flag"
 	"io"
+
+	"github.com/gogolfing/cli"
 )
 
 //SubCommandStruct is a struct type implementation of SubCommand where each field
@@ -24,10 +26,10 @@ type SubCommandStruct struct {
 	DescriptionValue string
 
 	//FlagSetter is used as the SubCommand's implementation for SetFlags if not nil.
-	FlagSetter
+	cli.FlagSetter
 
 	//ParameterUsageValue is used as the SubCommand's implementation if not nil.
-	ParameterUsageValue func() ([]*Parameter, string)
+	ParameterUsageValue func() ([]*cli.Parameter, string)
 
 	//SetParametersValue is used as the SubCommand's implementation if not nil.
 	SetParametersValue func([]string) error
@@ -66,7 +68,7 @@ func (scs *SubCommandStruct) SetFlags(f *flag.FlagSet) {
 //ParameterUsage calls and returns the results from scs.ParameterUsageValue()
 //if the field is not nil.
 //Otherwise, nil and the empty string are returned.
-func (scs *SubCommandStruct) ParameterUsage() ([]*Parameter, string) {
+func (scs *SubCommandStruct) ParameterUsage() ([]*cli.Parameter, string) {
 	if scs.ParameterUsageValue != nil {
 		return scs.ParameterUsageValue()
 	}

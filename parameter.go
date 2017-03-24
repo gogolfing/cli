@@ -16,6 +16,21 @@ type Parameter struct {
 	Many bool
 }
 
+//ParameterSetter provides the interface for a cli working with command line parameters.
+type ParameterSetter interface {
+	//ParameterUsage returns the Parameters used and a possible usage string to
+	//describe parameters in more detail.
+	//These values are used in help and error output.
+	ParameterUsage() (params []*Parameter, usage string)
+
+	//SetParameters allows implementations to receive parameter arguments during
+	//argument parsing.
+	//An error should be returned if values cannot be correctly parsed as parameters
+	//expected by the implementation.
+	//Implementations should not retain references to values.
+	SetParameters(values []string) error
+}
+
 //FormatParameters calls format() for each Parameter in params and returns
 //the result joined by " ".
 func FormatParameters(params []*Parameter, format func(p *Parameter) string) string {
@@ -28,14 +43,13 @@ func FormatParameters(params []*Parameter, format func(p *Parameter) string) str
 
 //FormatParameter returns a string representation of p appropriate for help and
 //error output.
-//
-//This value may be changed to affect the output of this package.
-var FormatParameter = func(p *Parameter) string {
+func FormatParameter(p *Parameter) string {
 	return FormatArgument(FormatParameterName(p.Name), p.Optional, p.Many)
 }
 
 //FormatParameterName returns a string representation of a Parameter name appropriate
 //for help and error output.
-//
-//This value my be changed to affect the output of this package.
-var FormatParameterName = strings.ToUpper
+//It returns the result of strings.ToUpper(name).
+func FormatParameterName(name string) string {
+	return strings.ToUpper(name)
+}

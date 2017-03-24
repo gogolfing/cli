@@ -1,6 +1,12 @@
 package cli
 
-import "flag"
+import (
+	"bytes"
+	"flag"
+	"io/ioutil"
+	"sort"
+	"strings"
+)
 
 //DoubleMinus is the argument to determine if the flag package has stopped parsing
 //after seeing this argument.
@@ -10,14 +16,8 @@ const DoubleMinus = "--"
 const (
 	Usage = "usage:"
 
-	GlobalOptionsName = "global_options"
-
 	ParameterName  = "parameter"
 	ParametersName = "parameters"
-
-	SubCommandName        = "sub_command"
-	SubCommandsName       = "sub_commands"
-	SubCommandOptionsName = "sub_command_options"
 
 	ArgumentSeparator = " | "
 )
@@ -29,7 +29,11 @@ type FlagSetter interface {
 	SetFlags(f *flag.FlagSet)
 }
 
-var FormatArgument = func(name string, optional, many bool) string {
+//ForamtArgument formats an argument's name given whether or not it is optional
+//or multiple values are allowed.
+//
+//This value may be changed to affect the output of this package.
+func FormatArgument(name string, optional, many bool) string {
 	result := name
 	if many {
 		result += "..."
@@ -40,4 +44,40 @@ var FormatArgument = func(name string, optional, many bool) string {
 		result = "<" + result + ">"
 	}
 	return result
+}
+
+//NewFlagSet creates a new flag.FlagSet with name and flag.ContinueOnError and
+//calls fs with it if fs is not nil. If fs is nil, then a new, empty flag.FlagSet
+//is returned.
+func NewFlagSet(name string, fs FlagSetter) *flag.FlagSet {
+	f := flag.NewFlagSet(name, flag.ContinueOnError)
+	f.Usage = func() {}
+	f.SetOutput(ioutil.Discard)
+	if fs != nil {
+		fs.SetFlags(f)
+	}
+	return f
+}
+
+//CountFlags returns the total number of flags (set or unset) in f.
+func CountFlags(f *flag.FlagSet) int {
+	count := 0
+	f.VisitAll(func(_ *flag.Flag) {
+		count++
+	})
+	return count
+}
+
+func GetFlagSetDefaults(f *flag.FlagSet) string {
+	out := bytes.NewBuffer([]byte{})
+	f.SetOutput(out)
+	f.PrintDefaults()
+	return strings.TrimRight(out.String(), "\n")
+}
+
+func GetJoinedNameSortedAliases(name string, aliases []string) string {
+	toSort := aliases[:]
+	sort.Strings(toSort)
+	all := append([]string{name}, toSort...)
+	return strings.Join(all, ", ")
 }

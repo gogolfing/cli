@@ -26,3 +26,7 @@ func ParseArgumentsInterspersed(f *flag.FlagSet, args []string) (params []string
 	}
 	return
 }
+
+func didStopAfterDoubleMinus(args, remaining []string) bool {
+	return len(args) > len(remaining) && args[len(args)-len(remaining)-1] == DoubleMinus
+}

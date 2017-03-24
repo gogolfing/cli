@@ -1,9 +1,45 @@
-package cli
+package subcommand
 
 import (
 	"context"
 	"io"
+
+	"github.com/gogolfing/cli"
 )
+
+//Output values that affect error and help output.
+const (
+	Usage = cli.Usage
+
+	GlobalOptionsName = "global_options"
+
+	SubCommandName        = "sub_command"
+	SubCommandsName       = "sub_commands"
+	SubCommandOptionsName = "sub_command_options"
+
+	ParameterName  = cli.ParameterName
+	ParametersName = cli.ParametersName
+
+	ArgumentSeparator = cli.ArgumentSeparator
+)
+
+//ForamtArgument formats an argument's name given whether or not it is optional
+//or multiple values are allowed.
+//
+//This value may be changed to affect the output of this package.
+var FormatArgument = cli.FormatArgument
+
+//FormatParameter returns a string representation of p appropriate for help and
+//error output.
+//
+//This value may be changed to affect the output of this package.
+var FormatParameter = cli.FormatParameter
+
+//FormatParameterName returns a string representation of a Parameter name appropriate
+//for help and error output.
+//
+//This value my be changed to affect the output of this package.
+var FormatParameterName = cli.FormatParameterName
 
 //SubCommand defines the options for a sub-command to be executed by a SubCommander.
 //
@@ -39,19 +75,10 @@ type SubCommand interface {
 	//If there are no errors during the argument parsing process, then SetFlags
 	//is only called once. Thus SetFlags should be idempotent and set static
 	//values on f.
-	FlagSetter
+	cli.FlagSetter
 
-	//ParameterUsage returns the Parameters used by the SubCommand and a possible
-	//usage string to describe params in more detail.
-	//These values are used in help and error output.
-	ParameterUsage() (params []*Parameter, usage string)
-
-	//SetParameters allows SubCommands to receive parameter arguments during argument
-	//parsing.
-	//An error should be returned if values cannot be correctly parsed as parameters
-	//expected by this SubCommand.
-	//Implementations should not retain references to values.
-	SetParameters(values []string) error
+	//ParameterSetter for SubCommand parameters.
+	cli.ParameterSetter
 
 	//Execute is where the SubCommand should do its work.
 	//A non-nil return value indicates the execution failed and that error will
@@ -60,7 +87,5 @@ type SubCommand interface {
 }
 
 func subCommandFlagCount(subCommand SubCommand) int {
-	f := newFlagSet(subCommand.Name())
-	subCommand.SetFlags(f)
-	return countFlags(f)
+	return cli.CountFlags(cli.NewFlagSet(subCommand.Name(), subCommand))
 }

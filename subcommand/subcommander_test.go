@@ -1,4 +1,4 @@
-package cli
+package subcommand
 
 import (
 	"bytes"
@@ -12,6 +12,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/gogolfing/cli"
 )
 
 const (
@@ -37,7 +39,7 @@ func TestSubCommander_RegisterHelp_RegistersWithNameAndAlaises(t *testing.T) {
 func TestSubCommander_RegisterListSubCommands_RegistersWithNameAndAliases(t *testing.T) {
 	sc := &SubCommander{}
 
-	sc.RegisterListSubCommands("list", "", "", "ls")
+	sc.RegisterList("list", "", "", "ls")
 
 	if sc.names["list"] == nil {
 		t.Fatalf("list should be registered")
@@ -242,9 +244,9 @@ func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingParameters
 					}
 					return err
 				},
-				ParameterUsageValue: func() ([]*Parameter, string) {
-					return []*Parameter{
-						&Parameter{
+				ParameterUsageValue: func() ([]*cli.Parameter, string) {
+					return []*cli.Parameter{
+						&cli.Parameter{
 							Name:     "PV",
 							Optional: true,
 							Many:     false,
@@ -345,14 +347,14 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubC
 				SynopsisValue:    "synopsis",
 				DescriptionValue: "description",
 				FlagSetter:       sfs,
-				ParameterUsageValue: func() ([]*Parameter, string) {
-					return []*Parameter{
-						&Parameter{
+				ParameterUsageValue: func() ([]*cli.Parameter, string) {
+					return []*cli.Parameter{
+						&cli.Parameter{
 							Name:     "p1",
 							Optional: false,
 							Many:     false,
 						},
-						&Parameter{
+						&cli.Parameter{
 							Name:     "p2",
 							Optional: true,
 							Many:     true,
@@ -401,7 +403,7 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubC
 }
 
 func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorParsingSubCommandParameters(t *testing.T) {
-	formattedParameter := FormatParameter(&Parameter{Name: SubCommandName})
+	formattedParameter := FormatParameter(&cli.Parameter{Name: SubCommandName})
 	outErrStringSuffix := "\n\n" + Usage + " ... help [parameters...]" +
 		"\n\n" + ParametersName + ": " + formattedParameter + "\n" +
 		formattedParameter + " is the " + SubCommandName + " to provide help for" + "\n"
@@ -412,11 +414,11 @@ func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorParsing
 	}{
 		{
 			args: strings.Fields("help"),
-			err:  &RequiredParameterNotSetError{Name: SubCommandName},
+			err:  &cli.RequiredParameterNotSetError{Name: SubCommandName},
 		},
 		{
 			args: strings.Fields("help sub another"),
-			err:  ErrTooManyParameters,
+			err:  cli.ErrTooManyParameters,
 		},
 	}
 	for _, test := range tests {
@@ -466,7 +468,7 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithRegisteredHelpSubComma
 }
 
 func TestSubCommander_ExecuteContextOut_SubCommandRegisteredListErrorParsingSubCommandParameters(t *testing.T) {
-	err := ErrTooManyParameters
+	err := cli.ErrTooManyParameters
 
 	sct := &SubCommanderTest{
 		RegisterList: true,
@@ -541,7 +543,7 @@ func testSubCommanderTest(t *testing.T, sct *SubCommanderTest, tags ...interface
 		sc.RegisterHelp("help", "", "")
 	}
 	if sct.RegisterList {
-		sc.RegisterListSubCommands("list", "", "")
+		sc.RegisterList("list", "", "")
 	}
 
 	if sct.Context == nil {
@@ -597,7 +599,7 @@ func newOutputs() (*bytes.Buffer, *bytes.Buffer) {
 	return bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
 }
 
-func getFlagSetterDefaults(fs FlagSetter) string {
+func getFlagSetterDefaults(fs cli.FlagSetter) string {
 	f := flag.NewFlagSet("", flag.ContinueOnError)
 	out := bytes.NewBuffer([]byte{})
 	fs.SetFlags(f)

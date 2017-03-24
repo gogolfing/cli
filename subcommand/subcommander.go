@@ -1,4 +1,4 @@
-package cli
+package subcommand
 
 import (
 	"bytes"
@@ -6,11 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/gogolfing/cli"
 )
 
 //SubCommander provides registering multiple SubCommands and executing them from
@@ -30,7 +31,7 @@ type SubCommander struct {
 	//If there are no errors during the argument parsing process, then SetFlags
 	//is only called once. Thus SetFlags should be idempotent and set static
 	//values on f.
-	GlobalFlags FlagSetter
+	GlobalFlags cli.FlagSetter
 
 	//DisallowGlobalFlagsWithSubCommand denotes whether or not global flags may
 	//be present once the sub-command has been defined in the arguments.
@@ -86,11 +87,11 @@ func (sc *SubCommander) RegisterHelp(name, synopsis, description string, aliases
 	)
 }
 
-//RegisterListSubCommands registers a list SubCommand that prints out all available
+//RegisterList registers a list SubCommand that prints out all available
 //sub-commands when invoked.
 //The SubCommand's name, synopsis, description, and aliases are provided as parameters.
 //If synopsis or description or the empty string, then defaults are used.
-func (sc *SubCommander) RegisterListSubCommands(name, synopsis, description string, aliases ...string) {
+func (sc *SubCommander) RegisterList(name, synopsis, description string, aliases ...string) {
 	list := &listSubCommand{
 		sc: sc,
 	}
@@ -159,7 +160,7 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 	}
 
 	if pgfe, ok := err.(*ParsingGlobalArgsError); ok {
-		if pgfe.error == flag.ErrHelp {
+		if pgfe.Err == flag.ErrHelp {
 			sc.printCommandError(outErr, nil, true)
 		} else {
 			sc.printCommandError(outErr, pgfe, true)
@@ -178,7 +179,7 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 	}
 
 	if psce, ok := err.(*ParsingSubCommandError); ok {
-		if psce.error == flag.ErrHelp {
+		if psce.Err == flag.ErrHelp {
 			printSubCommandHeaderDescription(outErr, subCommand)
 			fmt.Fprintf(outErr, "%s", "\n\n")
 			sc.printSubCommandError(outErr, nil, subCommand)
@@ -196,11 +197,7 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 }
 
 func (sc *SubCommander) executeContextOut(ctx context.Context, args []string, out, outErr io.Writer) (SubCommand, error) {
-	f := newFlagSet("")
-
-	if sc.GlobalFlags != nil {
-		sc.GlobalFlags.SetFlags(f)
-	}
+	f := cli.NewFlagSet("", sc.GlobalFlags)
 	if err := f.Parse(args); err != nil {
 		return nil, &ParsingGlobalArgsError{err}
 	}
@@ -242,7 +239,7 @@ func (sc *SubCommander) executeSubCommand(
 			return
 		}
 		if r := recover(); r != nil {
-			err = ParsingSubCommandError{fmt.Errorf("%v", r)}
+			err = &ParsingSubCommandError{fmt.Errorf("%v", r)}
 		}
 	}()
 
@@ -261,13 +258,12 @@ func (sc *SubCommander) executeSubCommand(
 }
 
 func (sc *SubCommander) parseSubCommandArgs(subCommand SubCommand, args []string) error {
-	f := newFlagSet(subCommand.Name())
-	subCommand.SetFlags(f)
+	f := cli.NewFlagSet(subCommand.Name(), subCommand)
 	if !sc.DisallowGlobalFlagsWithSubCommand && sc.GlobalFlags != nil {
 		sc.GlobalFlags.SetFlags(f)
 	}
 
-	params, err := ParseArgumentsInterspersed(f, args)
+	params, err := cli.ParseArgumentsInterspersed(f, args)
 	if err != nil {
 		return err
 	}
@@ -345,9 +341,8 @@ func (sc *SubCommander) printSubCommandError(out io.Writer, err error, subComman
 }
 
 func (sc *SubCommander) maybePrintSubCommandOptionsUsage(out io.Writer, subCommand SubCommand) {
-	fs := newFlagSet(subCommand.Name())
-	subCommand.SetFlags(fs)
-	defaults := getFlagSetDefaults(fs)
+	f := cli.NewFlagSet(subCommand.Name(), subCommand)
+	defaults := cli.GetFlagSetDefaults(f)
 	if len(defaults) > 0 {
 		fmt.Fprintf(out, "\n%s:\n%s\n", SubCommandOptionsName, defaults)
 	}
@@ -356,7 +351,7 @@ func (sc *SubCommander) maybePrintSubCommandOptionsUsage(out io.Writer, subComma
 func (sc *SubCommander) maybePrintParameters(out io.Writer, subCommand SubCommand) {
 	params, usage := subCommand.ParameterUsage()
 
-	result := FormatParameters(params, FormatParameter)
+	result := cli.FormatParameters(params, FormatParameter)
 	if len(usage) > 0 {
 		if len(result) > 0 {
 			result += "\n"
@@ -393,7 +388,6 @@ func (sc *SubCommander) getSubCommandLineUsage(subCommand SubCommand) string {
 	if len(args) == 0 {
 		return ""
 	}
-
 	joined := strings.Join(args, ArgumentSeparator)
 	if len(args) == 1 {
 		return FormatArgument(joined, true, true)
@@ -417,19 +411,15 @@ func (sc *SubCommander) getSubCommandUsageStats(subCommand SubCommand) (hasGloba
 }
 
 func (sc *SubCommander) hasGlobalOptions() bool {
-	return countFlags(sc.globalFlagSet()) > 0
+	return cli.CountFlags(sc.globalFlagSet()) > 0
 }
 
 func (sc *SubCommander) globalFlagSet() *flag.FlagSet {
-	f := newFlagSet("")
-	if sc.GlobalFlags != nil {
-		sc.GlobalFlags.SetFlags(f)
-	}
-	return f
+	return cli.NewFlagSet("", sc.GlobalFlags)
 }
 
 func (sc *SubCommander) getGlobalFlagsUsage() string {
-	defaults := getFlagSetDefaults(sc.globalFlagSet())
+	defaults := cli.GetFlagSetDefaults(sc.globalFlagSet())
 	if len(defaults) == 0 {
 		return ""
 	}
@@ -478,10 +468,7 @@ func printSubCommandHeaderDescription(out io.Writer, subCommand SubCommand) {
 }
 
 func getSortedJoinedSubCommandNameAliases(subCommand SubCommand) string {
-	result := []string{subCommand.Name()}
-	result = append(result, subCommand.Aliases()...)
-	sort.Strings(result[1:])
-	return strings.Join(result, ", ")
+	return cli.GetJoinedNameSortedAliases(subCommand.Name(), subCommand.Aliases())
 }
 
 func (sc *SubCommander) sortedSubCommandNames() []string {
@@ -512,40 +499,14 @@ func padRight(count int, value string) string {
 	return string(result)
 }
 
-func didStopAfterDoubleMinus(args, remaining []string) bool {
-	return len(args) > len(remaining) && args[len(args)-len(remaining)-1] == DoubleMinus
-}
-
-func newFlagSet(name string) *flag.FlagSet {
-	f := flag.NewFlagSet(name, flag.ContinueOnError)
-	f.Usage = func() {}
-	f.SetOutput(ioutil.Discard)
-	return f
-}
-
-func countFlags(f *flag.FlagSet) int {
-	count := 0
-	f.VisitAll(func(_ *flag.Flag) {
-		count++
-	})
-	return count
-}
-
-func getFlagSetDefaults(f *flag.FlagSet) string {
-	out := bytes.NewBuffer([]byte{})
-	f.SetOutput(out)
-	f.PrintDefaults()
-	return strings.TrimRight(out.String(), "\n")
-}
-
 type helpSubCommand struct {
 	sc *SubCommander
 
 	helpSubCommandName string
 }
 
-func (h *helpSubCommand) ParameterUsage() ([]*Parameter, string) {
-	params := []*Parameter{
+func (h *helpSubCommand) ParameterUsage() ([]*cli.Parameter, string) {
+	params := []*cli.Parameter{
 		{Name: SubCommandName, Optional: false, Many: false},
 	}
 	usage := fmt.Sprintf("%v is the %v to provide help for", FormatParameter(params[0]), SubCommandName)
@@ -555,10 +516,10 @@ func (h *helpSubCommand) ParameterUsage() ([]*Parameter, string) {
 
 func (h *helpSubCommand) SetParameters(params []string) error {
 	if len(params) > 1 {
-		return ErrTooManyParameters
+		return cli.ErrTooManyParameters
 	}
 	if len(params) == 0 {
-		return &RequiredParameterNotSetError{
+		return &cli.RequiredParameterNotSetError{
 			Name: SubCommandName,
 			Many: false,
 		}
@@ -585,13 +546,13 @@ type listSubCommand struct {
 	sc *SubCommander
 }
 
-func (l *listSubCommand) ParameterUsage() ([]*Parameter, string) {
+func (l *listSubCommand) ParameterUsage() ([]*cli.Parameter, string) {
 	return nil, ""
 }
 
 func (l *listSubCommand) SetParameters(params []string) error {
 	if len(params) > 0 {
-		return ErrTooManyParameters
+		return cli.ErrTooManyParameters
 	}
 	return nil
 }
