@@ -1,7 +1,12 @@
 package clitest
 
 import (
+	"bytes"
+	"context"
 	"flag"
+	"fmt"
+	"io"
+	"strings"
 
 	"github.com/gogolfing/cli"
 )
@@ -32,4 +37,45 @@ func (sfs *SimpleFlagSetter) SetFlags(f *flag.FlagSet) {
 	f.IntVar(&sfs.Int, "int"+sfs.Suffix, sfs.Int, "int_usage")
 	f.StringVar(&sfs.String, "string"+sfs.Suffix, sfs.String, "string_usage")
 	f.BoolVar(&sfs.Bool, "bool"+sfs.Suffix, sfs.Bool, "bool_usage")
+}
+
+func NewExecuteFunc(out, outErr string, err error) func(context.Context, io.Writer, io.Writer) error {
+	f := func(_ context.Context, outW, outErrW io.Writer) error {
+		fmt.Fprint(outW, out)
+		fmt.Fprint(outErrW, outErr)
+		return err
+	}
+	return f
+}
+
+func NewOutputs() (*bytes.Buffer, *bytes.Buffer) {
+	return bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
+}
+
+func GetFlagSetterDefaults(fs cli.FlagSetter) string {
+	f := flag.NewFlagSet("", flag.ContinueOnError)
+	out := bytes.NewBuffer([]byte{})
+	fs.SetFlags(f)
+	f.SetOutput(out)
+	f.PrintDefaults()
+	return strings.TrimRight(out.String(), "\n")
+}
+
+type ParameterSetterStruct struct {
+	ParameterUsageValue func() ([]*cli.Parameter, string)
+	SetParametersValue  func([]string) error
+}
+
+func (pss *ParameterSetterStruct) ParameterUsage() ([]*cli.Parameter, string) {
+	if pss.ParameterUsageValue != nil {
+		return pss.ParameterUsageValue()
+	}
+	return nil, ""
+}
+
+func (pss *ParameterSetterStruct) SetParameters(params []string) error {
+	if pss.SetParametersValue != nil {
+		return pss.SetParametersValue(params)
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"flag"
+	"io/ioutil"
 	"reflect"
 	"strings"
 	"testing"
@@ -116,4 +117,11 @@ func TestParseArgumentsInterspersed(t *testing.T) {
 			t.Errorf("%v: ParseArgumentsInterspersed() err = %v WANT %v", i, err, test.err)
 		}
 	}
+}
+
+func newFlagSet(name string) *flag.FlagSet {
+	f := flag.NewFlagSet(name, flag.ContinueOnError)
+	f.Usage = func() {}
+	f.SetOutput(ioutil.Discard)
+	return f
 }

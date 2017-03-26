@@ -20,6 +20,7 @@ func (e *ExecutingCommandError) Error() string {
 	return e.Err.Error()
 }
 
+//IsExecutionError returns whether or not err is an ExecutingcommandError.
 func IsExecutionError(err error) bool {
 	_, ok := err.(*ExecutingCommandError)
 	return ok

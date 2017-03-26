@@ -48,11 +48,8 @@ func (e *ExecutingSubCommandError) Error() string {
 	return e.Err.Error()
 }
 
-//IsExecutionError returns whether or not err is an ExecutingSubCommandError error.
+//IsExecutionError returns whether or not err is an ExecutingSubCommandError.
 func IsExecutionError(err error) bool {
-	switch err.(type) {
-	case *ExecutingSubCommandError:
-		return true
-	}
-	return false
+	_, ok := err.(*ExecutingSubCommandError)
+	return ok
 }

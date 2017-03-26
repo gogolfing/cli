@@ -17,7 +17,6 @@ const (
 	SubCommandsName       = "sub_commands"
 	SubCommandOptionsName = "sub_command_options"
 
-	ParameterName  = cli.ParameterName
 	ParametersName = cli.ParametersName
 
 	ArgumentSeparator = cli.ArgumentSeparator
@@ -82,7 +81,7 @@ type SubCommand interface {
 
 	//Execute is where the SubCommand should do its work.
 	//A non-nil return value indicates the execution failed and that error will
-	//be process by a SubCommander.
+	//be processed by a SubCommander.
 	Execute(ctx context.Context, out, outErr io.Writer) error
 }
 

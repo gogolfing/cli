@@ -11,20 +11,36 @@ import (
 	"github.com/gogolfing/cli"
 )
 
+//Commander provides options and methods for executing a Command.
+//
+//Note that Commander is NOT safe for use with multiple goroutines.
 type Commander struct {
+	//The program name to execute. Used in help and error output.
+	//This will usuaully be os.Args[0].
 	Name string
 
+	//Command is the Command to execute.
 	Command
 }
 
+//Execute is syntactic sugar for ExecuteContext() with context.Background().
 func (c *Commander) Execute(args []string) error {
 	return c.ExecuteContext(context.Background(), args)
 }
 
+//ExecuteContext is syntactic sugar for ExecuteContextOut() with os.Stdout and os.Stderr.
 func (c *Commander) ExecuteContext(ctx context.Context, args []string) error {
 	return c.ExecuteContextOut(ctx, args, os.Stdout, os.Stderr)
 }
 
+//ExecuteContextOut attempts to execute c.Command.
+//ctx will be passed along unaltered to the Command's Execute() method.
+//args are the command line arguments to parse and use for Command execution.
+//They should include command line arguments excluding the program name - usually os.Args[1:].
+//out and outErr are the io.Writers to use for standard out and standard error
+//for Command execution and help and error output.
+//
+//TODO
 func (c *Commander) ExecuteContextOut(ctx context.Context, args []string, out, outErr io.Writer) error {
 	err := c.executeContextOut(ctx, args, out, outErr)
 	if err == nil {
@@ -91,7 +107,7 @@ func (c *Commander) printCommandUsage(out io.Writer) {
 
 func (c *Commander) maybePrintCommandLineUsage(out io.Writer) {
 	if commandLineUsage := c.getCommandLineUsage(); len(commandLineUsage) > 0 {
-		fmt.Fprintf(out, "\n%s\n", commandLineUsage)
+		fmt.Fprintf(out, " %s", commandLineUsage)
 	}
 }
 

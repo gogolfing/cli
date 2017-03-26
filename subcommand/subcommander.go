@@ -21,7 +21,6 @@ import (
 type SubCommander struct {
 	//CommandName is used in error and help output. It should be the name of the
 	//program that was invoked.
-	//It is set to os.Args[0] by NewSubCommander().
 	CommandName string
 
 	//GlobalFlags is a FlagSetter that is used for setting global flags for subcommands.
@@ -44,12 +43,6 @@ type SubCommander struct {
 
 	names   map[string]SubCommand
 	aliases map[string]SubCommand
-}
-
-func NewSubCommander() *SubCommander {
-	return &SubCommander{
-		CommandName: os.Args[0],
-	}
 }
 
 //RegisterHelp registers a help SubCommand that prints out help information about
@@ -76,13 +69,12 @@ func (sc *SubCommander) RegisterHelp(name, synopsis, description string, aliases
 
 	sc.Register(
 		&SubCommandStruct{
-			NameValue:           name,
-			AliasesValue:        aliases,
-			SynopsisValue:       synopsis,
-			DescriptionValue:    description,
-			ParameterUsageValue: help.ParameterUsage,
-			SetParametersValue:  help.SetParameters,
-			ExecuteValue:        help.Execute,
+			NameValue:        name,
+			AliasesValue:     aliases,
+			SynopsisValue:    synopsis,
+			DescriptionValue: description,
+			ParameterSetter:  help,
+			ExecuteValue:     help.Execute,
 		},
 	)
 }
@@ -105,13 +97,12 @@ func (sc *SubCommander) RegisterList(name, synopsis, description string, aliases
 
 	sc.Register(
 		&SubCommandStruct{
-			NameValue:           name,
-			AliasesValue:        aliases,
-			SynopsisValue:       synopsis,
-			DescriptionValue:    description,
-			ParameterUsageValue: list.ParameterUsage,
-			SetParametersValue:  list.SetParameters,
-			ExecuteValue:        list.Execute,
+			NameValue:        name,
+			AliasesValue:     aliases,
+			SynopsisValue:    synopsis,
+			DescriptionValue: description,
+			ParameterSetter:  list,
+			ExecuteValue:     list.Execute,
 		},
 	)
 }
@@ -147,7 +138,7 @@ func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string) error
 //ExecuteContextOut attempts to find and execute a registered SubCommand.
 //ctx will be passed along unaltered to the SubCommand's Execute() method.
 //args are the command line arguments to parse and use for SubCommand execution.
-//They should include all command line arguments including the program name.
+//They should include command line arguments excluding the program name - usually os.Args[1:].
 //out and outErr are the io.Writers to use for standard out and standard error
 //for SubCommand execution and help and error output.
 //
@@ -522,6 +513,12 @@ func (h *helpSubCommand) SetParameters(params []string) error {
 		return &cli.RequiredParameterNotSetError{
 			Name: SubCommandName,
 			Many: false,
+			Formatted: FormatParameter(
+				&cli.Parameter{
+					Name: SubCommandName,
+					Many: false,
+				},
+			),
 		}
 	}
 

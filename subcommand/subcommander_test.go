@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/gogolfing/cli"
+	"github.com/gogolfing/cli/clitest"
 )
 
 const (
@@ -21,7 +22,7 @@ const (
 	SimpleGlobalsUsage = "usage: command [global_options...] <sub_command> [[global_options | sub_command_options | parameters]...]\n"
 )
 
-var errExecute = errors.New("error executing")
+var errExecute = fmt.Errorf("error executing")
 
 func TestSubCommander_RegisterHelp_RegistersWithNameAndAlaises(t *testing.T) {
 	sc := &SubCommander{}
@@ -79,7 +80,7 @@ func TestSubCommander_Execute_CallsExecuteContextOutCorrectly(t *testing.T) {
 
 	subCommand := &SubCommandStruct{
 		NameValue:    "a",
-		ExecuteValue: NewExecuteFunc("out", "outErr", errExecute),
+		ExecuteValue: clitest.NewExecuteFunc("out", "outErr", errExecute),
 	}
 	sc.Register(subCommand)
 
@@ -94,7 +95,7 @@ func TestSubCommander_Execute_CallsExecuteContextOutCorrectly(t *testing.T) {
 	if outErrBytes, _ := ioutil.ReadFile(os.Stderr.Name()); string(outErrBytes) != "outErr" {
 		t.Fatalf("outErr = %s WANT %s", outErrBytes, "outErr")
 	}
-	if err.Error() != errExecute.Error() {
+	if !reflect.DeepEqual(err, &ExecutingSubCommandError{errExecute}) {
 		t.Fatalf("err = %v WANT %v", err, errExecute)
 	}
 }
@@ -112,13 +113,13 @@ func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_Help(t *testing.T
 func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_OtherError(t *testing.T) {
 	errString := "flag provided but not defined: -other"
 
-	fs := NewStringsFlagSetter("value")
+	fs := clitest.NewStringsFlagSetter("value")
 	sct := &SubCommanderTest{
 		SubCommander: &SubCommander{
 			GlobalFlags: fs,
 		},
 		Args:         strings.Fields("-other 1234"),
-		OutErrString: errString + "\n\n" + SimpleGlobalsUsage + "\n" + GlobalOptionsName + ":\n" + getFlagSetterDefaults(fs) + "\n",
+		OutErrString: errString + "\n\n" + SimpleGlobalsUsage + "\n" + GlobalOptionsName + ":\n" + clitest.GetFlagSetterDefaults(fs) + "\n",
 		Err:          &ParsingGlobalArgsError{errors.New(errString)},
 	}
 
@@ -140,7 +141,7 @@ func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError(t *testing.T) 
 			Err:          ErrUnsuppliedSubCommand,
 		},
 		func() *SubCommanderTest {
-			fs := NewStringsFlagSetter("value")
+			fs := clitest.NewStringsFlagSetter("value")
 			return &SubCommanderTest{
 				SubCommander: &SubCommander{
 					GlobalFlags: fs,
@@ -214,7 +215,7 @@ func TestSubCommander_ExecuteContextOut_UnknownSubCommandError(t *testing.T) {
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_FlagErrHelP(t *testing.T) {
+func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_FlagErrHelp(t *testing.T) {
 	err := flag.ErrHelp
 
 	sct := &SubCommanderTest{
@@ -238,20 +239,22 @@ func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingParameters
 		SubCommands: []SubCommand{
 			&SubCommandStruct{
 				NameValue: "a",
-				SetParametersValue: func(params []string) error {
-					if !reflect.DeepEqual(params, []string{"foo", "bar"}) {
-						t.Fatal("wrong parameters")
-					}
-					return err
-				},
-				ParameterUsageValue: func() ([]*cli.Parameter, string) {
-					return []*cli.Parameter{
-						&cli.Parameter{
-							Name:     "PV",
-							Optional: true,
-							Many:     false,
-						},
-					}, "extra parameter usage"
+				ParameterSetter: &clitest.ParameterSetterStruct{
+					SetParametersValue: func(params []string) error {
+						if !reflect.DeepEqual(params, []string{"foo", "bar"}) {
+							t.Fatal("wrong parameters")
+						}
+						return err
+					},
+					ParameterUsageValue: func() ([]*cli.Parameter, string) {
+						return []*cli.Parameter{
+							&cli.Parameter{
+								Name:     "PV",
+								Optional: true,
+								Many:     false,
+							},
+						}, "extra parameter usage"
+					},
 				},
 			},
 		},
@@ -265,8 +268,8 @@ func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingParameters
 }
 
 func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithDisallowGlobalOptionsSet(t *testing.T) {
-	gfs := NewStringsFlagSetter("g1")
-	sfs := NewStringsFlagSetter("s1")
+	gfs := clitest.NewStringsFlagSetter("g1")
+	sfs := clitest.NewStringsFlagSetter("s1")
 
 	sct := &SubCommanderTest{
 		SubCommander: &SubCommander{
@@ -287,8 +290,8 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithDisallowGlobalOptionsS
 }
 
 func TestSubCommander_ExecuteContextOut_ErrorsWithDisallowGlobalsAndGlobalOptionSetAfterSubCommand(t *testing.T) {
-	gfs := NewStringsFlagSetter("g1")
-	sfs := NewStringsFlagSetter("s1")
+	gfs := clitest.NewStringsFlagSetter("g1")
+	sfs := clitest.NewStringsFlagSetter("s1")
 	err := fmt.Errorf("flag provided but not defined: %v", "-g1")
 
 	sct := &SubCommanderTest{
@@ -304,7 +307,7 @@ func TestSubCommander_ExecuteContextOut_ErrorsWithDisallowGlobalsAndGlobalOption
 		},
 		Args: strings.Fields("sub -g1 foo -s1 bar"),
 		OutErrString: err.Error() + "\n\n" + Usage + " ... sub [sub_command_options...]" + "\n\n" +
-			SubCommandOptionsName + ":\n" + getFlagSetterDefaults(sfs) + "\n",
+			SubCommandOptionsName + ":\n" + clitest.GetFlagSetterDefaults(sfs) + "\n",
 		Err: &ParsingSubCommandError{err},
 	}
 
@@ -317,7 +320,7 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithAlias(t *testing.T) {
 			&SubCommandStruct{
 				NameValue:    "foo",
 				AliasesValue: []string{"bar"},
-				ExecuteValue: NewExecuteFunc("foo bar", "", nil),
+				ExecuteValue: clitest.NewExecuteFunc("foo bar", "", nil),
 			},
 		},
 		Args:      strings.Fields("bar"),
@@ -328,8 +331,8 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithAlias(t *testing.T) {
 }
 
 func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubCommandAndCorrectOutputsAndCorrectErrorHappyPath(t *testing.T) {
-	gfs := &SimpleFlagSetter{Suffix: "1"}
-	sfs := &SimpleFlagSetter{Suffix: "2"}
+	gfs := &clitest.SimpleFlagSetter{Suffix: "1"}
+	sfs := &clitest.SimpleFlagSetter{Suffix: "2"}
 
 	executeCalled := false
 	setParametersCalled := false
@@ -347,26 +350,28 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubC
 				SynopsisValue:    "synopsis",
 				DescriptionValue: "description",
 				FlagSetter:       sfs,
-				ParameterUsageValue: func() ([]*cli.Parameter, string) {
-					return []*cli.Parameter{
-						&cli.Parameter{
-							Name:     "p1",
-							Optional: false,
-							Many:     false,
-						},
-						&cli.Parameter{
-							Name:     "p2",
-							Optional: true,
-							Many:     true,
-						},
-					}, "extra parameter usage"
-				},
-				SetParametersValue: func(params []string) error {
-					setParametersCalled = true
-					if !reflect.DeepEqual(params, []string{"foo", "bar"}) {
-						t.Fatal("wrong parameters set")
-					}
-					return nil
+				ParameterSetter: &clitest.ParameterSetterStruct{
+					ParameterUsageValue: func() ([]*cli.Parameter, string) {
+						return []*cli.Parameter{
+							&cli.Parameter{
+								Name:     "p1",
+								Optional: false,
+								Many:     false,
+							},
+							&cli.Parameter{
+								Name:     "p2",
+								Optional: true,
+								Many:     true,
+							},
+						}, "extra parameter usage"
+					},
+					SetParametersValue: func(params []string) error {
+						setParametersCalled = true
+						if !reflect.DeepEqual(params, []string{"foo", "bar"}) {
+							t.Fatal("wrong parameters set")
+						}
+						return nil
+					},
 				},
 				ExecuteValue: func(actualCtx context.Context, out, outErr io.Writer) error {
 					executeCalled = true
@@ -394,10 +399,10 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubC
 	if !setParametersCalled {
 		t.Error("SetParameters() should have been called")
 	}
-	if !reflect.DeepEqual(gfs, &SimpleFlagSetter{Suffix: "1", Int: 1029, String: "whoami", Bool: false}) {
+	if !reflect.DeepEqual(gfs, &clitest.SimpleFlagSetter{Suffix: "1", Int: 1029, String: "whoami", Bool: false}) {
 		t.Error("global flags were not set correctly")
 	}
-	if !reflect.DeepEqual(sfs, &SimpleFlagSetter{Suffix: "2", Int: 0, String: "cli", Bool: true}) {
+	if !reflect.DeepEqual(sfs, &clitest.SimpleFlagSetter{Suffix: "2", Int: 0, String: "cli", Bool: true}) {
 		t.Error("sub-command flags were not set correctly")
 	}
 }
@@ -414,7 +419,7 @@ func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorParsing
 	}{
 		{
 			args: strings.Fields("help"),
-			err:  &cli.RequiredParameterNotSetError{Name: SubCommandName},
+			err:  &cli.RequiredParameterNotSetError{Name: SubCommandName, Formatted: formattedParameter},
 		},
 		{
 			args: strings.Fields("help sub another"),
@@ -488,15 +493,6 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithRegsiteredListSubComma
 	}
 
 	testSubCommanderTest(t, sct)
-}
-
-func NewExecuteFunc(out, outErr string, err error) func(context.Context, io.Writer, io.Writer) error {
-	f := func(_ context.Context, outW, outErrW io.Writer) error {
-		fmt.Fprint(outW, out)
-		fmt.Fprint(outErrW, outErr)
-		return err
-	}
-	return f
 }
 
 type SubCommanderTest struct {
@@ -588,22 +584,9 @@ func executeContextOut(sc *SubCommander, ctx context.Context, args []string) (*b
 		ctx = context.Background()
 	}
 
-	out, outErr := newOutputs()
+	out, outErr := clitest.NewOutputs()
 
 	err := sc.ExecuteContextOut(ctx, args, out, outErr)
 
 	return out, outErr, err
-}
-
-func newOutputs() (*bytes.Buffer, *bytes.Buffer) {
-	return bytes.NewBuffer([]byte{}), bytes.NewBuffer([]byte{})
-}
-
-func getFlagSetterDefaults(fs cli.FlagSetter) string {
-	f := flag.NewFlagSet("", flag.ContinueOnError)
-	out := bytes.NewBuffer([]byte{})
-	fs.SetFlags(f)
-	f.SetOutput(out)
-	f.PrintDefaults()
-	return strings.TrimRight(out.String(), "\n")
 }

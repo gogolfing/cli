@@ -22,17 +22,27 @@ var ErrInvalidParameters = errors.New("invalid parameters")
 
 //RequiredParameterNotSetError is an error that denotes a parameter was not supplied
 //in the arguments but is required to be present.
+//If Formatted is not empty, then it is used in Error(). Otherwise, Name is used.
+//It is up to client code to set Formatted if that output is desired.
 type RequiredParameterNotSetError struct {
 	Name string
 	Many bool
+
+	Formatted string
 }
 
 //Error provides the error implementation.
+//It returns fmt.Sprintf("required %s %s not set", ParameterName, <value>) where
+//<value> is e.Formatted if not empty or e.Name otherwise.
 func (e *RequiredParameterNotSetError) Error() string {
+	value := e.Name
+	if len(e.Formatted) != 0 {
+		value = e.Formatted
+	}
 	return fmt.Sprintf(
-		"required %v %v not set",
+		"required %s %s not set",
 		ParameterName,
-		FormatParameter(&Parameter{Name: e.Name, Many: e.Many}),
+		value,
 	)
 }
 

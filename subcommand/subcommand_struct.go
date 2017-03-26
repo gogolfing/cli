@@ -28,11 +28,9 @@ type SubCommandStruct struct {
 	//FlagSetter is used as the SubCommand's implementation for SetFlags if not nil.
 	cli.FlagSetter
 
-	//ParameterUsageValue is used as the SubCommand's implementation if not nil.
-	ParameterUsageValue func() ([]*cli.Parameter, string)
-
-	//SetParametersValue is used as the SubCommand's implementation if not nil.
-	SetParametersValue func([]string) error
+	//ParameterSetter is used as the SubCommand's implementation for ParameterSetter's
+	//methods if not nil.
+	cli.ParameterSetter
 
 	//ExecuteValue is used as the SubCommand's implementation if not nil.
 	ExecuteValue func(context.Context, io.Writer, io.Writer) error
@@ -65,29 +63,27 @@ func (scs *SubCommandStruct) SetFlags(f *flag.FlagSet) {
 	}
 }
 
-//ParameterUsage calls and returns the results from scs.ParameterUsageValue()
-//if the field is not nil.
-//Otherwise, nil and the empty string are returned.
+//ParameterUsage delegates to scs.ParameterSetter if the field is not nil.
+//Otherwise, it returns nil and the empty string.
 func (scs *SubCommandStruct) ParameterUsage() ([]*cli.Parameter, string) {
-	if scs.ParameterUsageValue != nil {
-		return scs.ParameterUsageValue()
+	if scs.ParameterSetter != nil {
+		return scs.ParameterSetter.ParameterUsage()
 	}
 	return nil, ""
 }
 
-//SetParameters calls and returns the result from scs.SetParametersValue(params)
-//if the field is not nil.
-//Otherwise, nil is returned.
+//SetParameters delegates to scs.ParameterSetter if the field is not nil.
+//Otherwise it returns nil.
 func (scs *SubCommandStruct) SetParameters(params []string) error {
-	if scs.SetParametersValue != nil {
-		return scs.SetParametersValue(params)
+	if scs.ParameterSetter != nil {
+		return scs.ParameterSetter.SetParameters(params)
 	}
 	return nil
 }
 
 //Execute calls and returns the result from scs.ExecuteValue(ctx, out, outErr)
 //if the field is not nil.
-//Otherwise, nil is returned.
+//Otherwise, it returns nil.
 func (scs *SubCommandStruct) Execute(ctx context.Context, out, outErr io.Writer) error {
 	if scs.ExecuteValue != nil {
 		return scs.ExecuteValue(ctx, out, outErr)
