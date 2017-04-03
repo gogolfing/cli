@@ -50,16 +50,12 @@ type SubCommander struct {
 //The SubCommand's name, synopsis, description, and aliases are provided as parameters.
 //If synopsis or description are the empty string, then defaults are used.
 func (sc *SubCommander) RegisterHelp(name, synopsis, description string, aliases ...string) {
-	help := &helpSubCommand{
-		sc: sc,
-	}
-
 	if synopsis == "" {
 		synopsis = fmt.Sprintf("Prints help information for a %v", SubCommandName)
 	}
 	if description == "" {
 		description = fmt.Sprintf(
-			"%v. This includes usage information about the %v's %v and %v",
+			"%v. This includes usage information about the %v's %v and %v.",
 			synopsis,
 			SubCommandName,
 			ParametersName,
@@ -68,13 +64,14 @@ func (sc *SubCommander) RegisterHelp(name, synopsis, description string, aliases
 	}
 
 	sc.Register(
-		&SubCommandStruct{
-			NameValue:        name,
-			AliasesValue:     aliases,
-			SynopsisValue:    synopsis,
-			DescriptionValue: description,
-			ParameterSetter:  help,
-			ExecuteValue:     help.Execute,
+		&helpSubCommand{
+			sc: sc,
+			SubCommandStruct: &SubCommandStruct{
+				NameValue:        name,
+				AliasesValue:     aliases,
+				SynopsisValue:    synopsis,
+				DescriptionValue: description,
+			},
 		},
 	)
 }
@@ -84,25 +81,22 @@ func (sc *SubCommander) RegisterHelp(name, synopsis, description string, aliases
 //The SubCommand's name, synopsis, description, and aliases are provided as parameters.
 //If synopsis or description or the empty string, then defaults are used.
 func (sc *SubCommander) RegisterList(name, synopsis, description string, aliases ...string) {
-	list := &listSubCommand{
-		sc: sc,
-	}
-
 	if synopsis == "" {
 		synopsis = fmt.Sprintf("Prints available %vs", SubCommandName)
 	}
 	if description == "" {
-		description = synopsis
+		description = synopsis + "."
 	}
 
 	sc.Register(
-		&SubCommandStruct{
-			NameValue:        name,
-			AliasesValue:     aliases,
-			SynopsisValue:    synopsis,
-			DescriptionValue: description,
-			ParameterSetter:  list,
-			ExecuteValue:     list.Execute,
+		&listSubCommand{
+			sc: sc,
+			SubCommandStruct: &SubCommandStruct{
+				NameValue:        name,
+				AliasesValue:     aliases,
+				SynopsisValue:    synopsis,
+				DescriptionValue: description,
+			},
 		},
 	)
 }
@@ -173,9 +167,9 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 		if psce.Err == flag.ErrHelp {
 			printSubCommandHeaderDescription(outErr, subCommand)
 			fmt.Fprintf(outErr, "%s", "\n\n")
-			sc.printSubCommandError(outErr, nil, subCommand)
+			sc.printSubCommandError(outErr, nil, true, subCommand)
 		} else {
-			sc.printSubCommandError(outErr, err, subCommand)
+			sc.printSubCommandError(outErr, err, true, subCommand)
 		}
 		return
 	}
@@ -275,7 +269,7 @@ func (sc *SubCommander) printCommandUsage(out io.Writer) {
 
 	fmt.Fprintf(out, " %v", FormatArgument(SubCommandName, false, false))
 
-	sc.maybePrintSubCommandLineUsage(out, nil)
+	sc.maybePrintSubCommandLineUsage(out, nil, true)
 
 	fmt.Fprintln(out)
 }
@@ -294,7 +288,7 @@ func (sc *SubCommander) maybePrintAvailableSubCommands(out io.Writer) {
 	}
 }
 
-func (sc *SubCommander) printSubCommandError(out io.Writer, err error, subCommand SubCommand) {
+func (sc *SubCommander) printSubCommandError(out io.Writer, err error, globals bool, subCommand SubCommand) {
 	if err != nil {
 		if err == flag.ErrHelp {
 			printSubCommandHeaderDescription(out, subCommand)
@@ -306,12 +300,12 @@ func (sc *SubCommander) printSubCommandError(out io.Writer, err error, subComman
 
 	fmt.Fprintf(out, "%s %s %s", Usage, "...", subCommand.Name())
 
-	sc.maybePrintSubCommandLineUsage(out, subCommand)
+	sc.maybePrintSubCommandLineUsage(out, subCommand, globals)
 
 	fmt.Fprintln(out)
 
 	hasGlobalOptions, hasSubCommandOptions, hasParameters := sc.getSubCommandUsageStats(subCommand)
-	if hasGlobalOptions && !sc.DisallowGlobalFlagsWithSubCommand {
+	if globals && hasGlobalOptions && !sc.DisallowGlobalFlagsWithSubCommand {
 		sc.maybePrintGlobalOptionsUsage(out)
 	}
 	if hasSubCommandOptions {
@@ -346,18 +340,18 @@ func (sc *SubCommander) maybePrintParameters(out io.Writer, subCommand SubComman
 	}
 }
 
-func (sc *SubCommander) maybePrintSubCommandLineUsage(out io.Writer, subCommand SubCommand) {
-	subCommandLineUsage := sc.getSubCommandLineUsage(subCommand)
+func (sc *SubCommander) maybePrintSubCommandLineUsage(out io.Writer, subCommand SubCommand, globals bool) {
+	subCommandLineUsage := sc.getSubCommandLineUsage(subCommand, globals)
 	if len(subCommandLineUsage) > 0 {
 		fmt.Fprintf(out, " %s", subCommandLineUsage)
 	}
 }
 
-func (sc *SubCommander) getSubCommandLineUsage(subCommand SubCommand) string {
+func (sc *SubCommander) getSubCommandLineUsage(subCommand SubCommand, globals bool) string {
 	hasGlobalOptions, hasSubCommandOptions, hasParameters := sc.getSubCommandUsageStats(subCommand)
 
 	args := []string{}
-	if hasGlobalOptions && !sc.DisallowGlobalFlagsWithSubCommand {
+	if globals && hasGlobalOptions && !sc.DisallowGlobalFlagsWithSubCommand {
 		args = append(args, GlobalOptionsName)
 	}
 	if hasSubCommandOptions {
@@ -485,6 +479,8 @@ type helpSubCommand struct {
 	sc *SubCommander
 
 	helpSubCommandName string
+
+	*SubCommandStruct
 }
 
 func (h *helpSubCommand) ParameterUsage() ([]*cli.Parameter, string) {
@@ -525,13 +521,18 @@ func (h *helpSubCommand) Execute(_ context.Context, out, outErr io.Writer) error
 		return err
 	}
 
-	h.sc.printSubCommandError(out, flag.ErrHelp, subCommand)
+	_, helpOk := subCommand.(*helpSubCommand)
+	_, listOk := subCommand.(*listSubCommand)
+
+	h.sc.printSubCommandError(out, flag.ErrHelp, !helpOk && !listOk, subCommand)
 
 	return nil
 }
 
 type listSubCommand struct {
 	sc *SubCommander
+
+	*SubCommandStruct
 }
 
 func (l *listSubCommand) ParameterUsage() ([]*cli.Parameter, string) {

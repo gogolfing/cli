@@ -513,6 +513,41 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithRegisteredHelpSubComma
 	testSubCommanderTest(t, sct)
 }
 
+func TestSubCommander_ExecuteContextOut_RegisteredHelpWithHelpHelpArgsDoesNotPrintGlobalOptions(t *testing.T) {
+	gfs := clitest.NewStringsFlagSetter("global1")
+
+	sc := &SubCommander{
+		GlobalFlags: gfs,
+	}
+	sc.RegisterHelp("help", "", "help_description")
+	sct := &SubCommanderTest{
+		SubCommander: sc,
+		Args:         strings.Fields("help help"),
+		OutString: "help - help_description\n\n" + Usage + " ... help [parameters...]\n\n" +
+			ParametersName + ": " + "<SUB_COMMAND>\n" +
+			"<SUB_COMMAND> is the " + SubCommandName + " to provide help for" + "\n",
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
+func TestSubCommander_ExecuteContextOut_RegisteredHelpWithHelpListArgsDoesNotPrintGlobalOptions(t *testing.T) {
+	gfs := clitest.NewStringsFlagSetter("global1")
+
+	sc := &SubCommander{
+		GlobalFlags: gfs,
+	}
+	sc.RegisterList("list", "", "list_description")
+	sct := &SubCommanderTest{
+		SubCommander: sc,
+		RegisterHelp: true,
+		Args:         strings.Fields("help list"),
+		OutString:    "list - list_description\n\n" + Usage + " ... list\n",
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
 func TestSubCommander_ExecuteContextOut_SubCommandRegisteredListErrorParsingSubCommandParameters(t *testing.T) {
 	err := cli.ErrTooManyParameters
 
