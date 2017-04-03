@@ -87,7 +87,3 @@ type SubCommand interface {
 	//should use.
 	Execute(ctx context.Context, in io.Reader, out, outErr io.Writer) error
 }
-
-func subCommandFlagCount(subCommand SubCommand) int {
-	return cli.CountFlags(cli.NewFlagSet(subCommand.Name(), subCommand))
-}

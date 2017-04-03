@@ -33,7 +33,7 @@ type SubCommandStruct struct {
 	cli.ParameterSetter
 
 	//ExecuteValue is used as the SubCommand's implementation if not nil.
-	ExecuteValue func(context.Context, io.Writer, io.Writer) error
+	ExecuteValue func(context.Context, io.Reader, io.Writer, io.Writer) error
 }
 
 //Name returns scs.NameValue.
@@ -84,9 +84,9 @@ func (scs *SubCommandStruct) SetParameters(params []string) error {
 //Execute calls and returns the result from scs.ExecuteValue(ctx, out, outErr)
 //if the field is not nil.
 //Otherwise, it returns nil.
-func (scs *SubCommandStruct) Execute(ctx context.Context, out, outErr io.Writer) error {
+func (scs *SubCommandStruct) Execute(ctx context.Context, in io.Reader, out, outErr io.Writer) error {
 	if scs.ExecuteValue != nil {
-		return scs.ExecuteValue(ctx, out, outErr)
+		return scs.ExecuteValue(ctx, in, out, outErr)
 	}
 	return nil
 }

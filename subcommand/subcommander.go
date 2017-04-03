@@ -121,25 +121,12 @@ func (sc *SubCommander) Register(subCommand SubCommand) {
 
 //Execute is syntactic sugar for ExecuteContext() with context.Background().
 func (sc *SubCommander) Execute(args []string) error {
-	return sc.ExecuteContext(context.Background(), args)
+	return sc.ExecuteContext(context.Background(), args, os.Stdin, os.Stdout, os.Stderr)
 }
 
-//ExecuteContext is syntactic sugar for ExecuteContextOut() with os.Stdout and os.Stderr.
-func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string) error {
-	return sc.ExecuteContextOut(ctx, args, os.Stdout, os.Stderr)
-}
-
-//ExecuteContextOut attempts to find and execute a registered SubCommand.
-//ctx will be passed along unaltered to the SubCommand's Execute() method.
-//args are the command line arguments to parse and use for SubCommand execution.
-//They should include command line arguments excluding the program name - usually os.Args[1:].
-//out and outErr are the io.Writers to use for standard out and standard error
-//for SubCommand execution and help and error output.
-//
-//TODO
-func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, out, outErr io.Writer) (err error) {
+func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string, in io.Reader, out, outErr io.Writer) (err error) {
 	var subCommand SubCommand = nil
-	subCommand, err = sc.executeContextOut(ctx, args, out, outErr)
+	subCommand, err = sc.executeContext(ctx, args, in, out, outErr)
 	if err == nil {
 		return
 	}
@@ -181,7 +168,7 @@ func (sc *SubCommander) ExecuteContextOut(ctx context.Context, args []string, ou
 	return
 }
 
-func (sc *SubCommander) executeContextOut(ctx context.Context, args []string, out, outErr io.Writer) (SubCommand, error) {
+func (sc *SubCommander) executeContext(ctx context.Context, args []string, in io.Reader, out, outErr io.Writer) (SubCommand, error) {
 	f := cli.NewFlagSet("", sc.GlobalFlags)
 	if err := f.Parse(args); err != nil {
 		return nil, &ParsingGlobalArgsError{err}
@@ -199,7 +186,7 @@ func (sc *SubCommander) executeContextOut(ctx context.Context, args []string, ou
 		return nil, UnknownSubCommandError(name)
 	}
 
-	return subCommand, sc.executeSubCommand(ctx, f, subCommand, args, out, outErr)
+	return subCommand, sc.executeSubCommand(ctx, f, subCommand, args, in, out, outErr)
 }
 
 func (sc *SubCommander) getSubCommand(name string) SubCommand {
@@ -217,6 +204,7 @@ func (sc *SubCommander) executeSubCommand(
 	gfs *flag.FlagSet,
 	subCommand SubCommand,
 	args []string,
+	in io.Reader,
 	out, outErr io.Writer,
 ) (err error) {
 	err = sc.parseSubCommandArgs(subCommand, args)
@@ -225,7 +213,7 @@ func (sc *SubCommander) executeSubCommand(
 		return
 	}
 
-	err = subCommand.Execute(ctx, out, outErr)
+	err = subCommand.Execute(ctx, in, out, outErr)
 	if err != nil {
 		err = &ExecutingSubCommandError{err}
 	}
@@ -380,7 +368,7 @@ func (sc *SubCommander) getSubCommandUsageStats(subCommand SubCommand) (hasGloba
 		params, _ := subCommand.ParameterUsage()
 		hasParameters = len(params) > 0
 
-		hasSubCommandOptions = subCommandFlagCount(subCommand) > 0
+		hasSubCommandOptions = cli.CountFlags(cli.NewFlagSet(subCommand.Name(), subCommand)) > 0
 	}
 
 	return
@@ -513,7 +501,7 @@ func (h *helpSubCommand) SetParameters(params []string) error {
 	return nil
 }
 
-func (h *helpSubCommand) Execute(_ context.Context, out, outErr io.Writer) error {
+func (h *helpSubCommand) Execute(_ context.Context, _ io.Reader, out, outErr io.Writer) error {
 	subCommand := h.sc.getSubCommand(h.helpSubCommandName)
 	if subCommand == nil {
 		err := UnknownSubCommandError(h.helpSubCommandName)
@@ -546,7 +534,7 @@ func (l *listSubCommand) SetParameters(params []string) error {
 	return nil
 }
 
-func (l *listSubCommand) Execute(_ context.Context, out, _ io.Writer) error {
+func (l *listSubCommand) Execute(_ context.Context, _ io.Reader, out, _ io.Writer) error {
 	fmt.Fprintf(out, "%s\n", l.sc.getAvailableSubCommandsUsage())
 	return nil
 }

@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -64,43 +63,34 @@ func TestSubCommander_Register_RegistersSubCommandsNameAndAliases(t *testing.T) 
 	}
 }
 
-func TestSubCommander_Execute_CallsExecuteContextOutCorrectly(t *testing.T) {
-	oldOut, oldErr := os.Stdout, os.Stderr
-	defer func() {
-		os.Stdout, os.Stderr = oldOut, oldErr
-	}()
-
-	tempDir, _ := ioutil.TempDir(".", "")
-	defer os.RemoveAll(tempDir)
-	out, _ := ioutil.TempFile(tempDir, "")
-	outErr, _ := ioutil.TempFile(tempDir, "")
-	os.Stdout, os.Stderr = out, outErr
-
+func TestSubCommander_Execute_CallsExecuteContextCorrectly(t *testing.T) {
 	sc := &SubCommander{}
 
 	subCommand := &SubCommandStruct{
-		NameValue:    "a",
-		ExecuteValue: clitest.NewExecuteFunc("out", "outErr", errExecute),
+		NameValue: "a",
+		ExecuteValue: func(_ context.Context, in io.Reader, out, outErr io.Writer) error {
+			if in.(*os.File) != os.Stdin {
+				t.Fatal("did not call execute with stdin")
+			}
+			if out.(*os.File) != os.Stdout {
+				t.Fatal("did not call execute with stdin")
+			}
+			if outErr.(*os.File) != os.Stderr {
+				t.Fatal("did not call execute with stdin")
+			}
+			return errExecute
+		},
 	}
 	sc.Register(subCommand)
 
 	err := sc.Execute(strings.Fields("a"))
 
-	out.Close()
-	outErr.Close()
-
-	if outBytes, _ := ioutil.ReadFile(os.Stdout.Name()); string(outBytes) != "out" {
-		t.Fatalf("out = %v WANT %s", string(outBytes), "out")
-	}
-	if outErrBytes, _ := ioutil.ReadFile(os.Stderr.Name()); string(outErrBytes) != "outErr" {
-		t.Fatalf("outErr = %s WANT %s", outErrBytes, "outErr")
-	}
 	if !reflect.DeepEqual(err, &ExecutingSubCommandError{errExecute}) {
 		t.Fatalf("err = %v WANT %v", err, errExecute)
 	}
 }
 
-func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_Help(t *testing.T) {
+func TestSubCommander_ExecuteContext_GlobalFlagParsingError_Help(t *testing.T) {
 	sct := &SubCommanderTest{
 		Args:         strings.Fields("-h"),
 		OutErrString: SimpleUsage,
@@ -110,7 +100,7 @@ func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_Help(t *testing.T
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_OtherError(t *testing.T) {
+func TestSubCommander_ExecuteContext_GlobalFlagParsingError_OtherError(t *testing.T) {
 	errString := "flag provided but not defined: -other"
 
 	fs := clitest.NewStringsFlagSetter("value")
@@ -126,7 +116,7 @@ func TestSubCommander_ExecuteContextOut_GlobalFlagParsingError_OtherError(t *tes
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError(t *testing.T) {
+func TestSubCommander_ExecuteContext_UnsuppliedSubCommandError(t *testing.T) {
 	prefix := ErrUnsuppliedSubCommand.Error() + "\n\n"
 
 	tests := []*SubCommanderTest{
@@ -156,7 +146,7 @@ func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError(t *testing.T) 
 	testSubCommanderTests(t, tests)
 }
 
-func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError_PrintsAvailableSubCommandsCorrectly(t *testing.T) {
+func TestSubCommander_ExecuteContext_UnsuppliedSubCommandError_PrintsAvailableSubCommandsCorrectly(t *testing.T) {
 	prefix := ErrUnsuppliedSubCommand.Error() + "\n\n"
 	subCommandListing :=
 		`  a               command a
@@ -182,7 +172,7 @@ func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError_PrintsAvailabl
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError_PrintsAvailableSubCommandsWithWideOutput(t *testing.T) {
+func TestSubCommander_ExecuteContext_UnsuppliedSubCommandError_PrintsAvailableSubCommandsWithWideOutput(t *testing.T) {
 	prefix := ErrUnsuppliedSubCommand.Error() + "\n\n"
 	subCommandListing :=
 		"  a, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9    command a"
@@ -203,7 +193,7 @@ func TestSubCommander_ExecuteContextOut_UnsuppliedSubCommandError_PrintsAvailabl
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_UnknownSubCommandError(t *testing.T) {
+func TestSubCommander_ExecuteContext_UnknownSubCommandError(t *testing.T) {
 	prefix := UnknownSubCommandError("foo").Error() + "\n\n"
 
 	sct := &SubCommanderTest{
@@ -215,7 +205,7 @@ func TestSubCommander_ExecuteContextOut_UnknownSubCommandError(t *testing.T) {
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_FlagErrHelp(t *testing.T) {
+func TestSubCommander_ExecuteContext_ParsingSubCommandError_FlagErrHelp(t *testing.T) {
 	err := flag.ErrHelp
 
 	sct := &SubCommanderTest{
@@ -232,7 +222,7 @@ func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_FlagErrHelp(t *te
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingParametersError(t *testing.T) {
+func TestSubCommander_ExecuteContext_ParsingSubCommandError_SettingParametersError(t *testing.T) {
 	err := fmt.Errorf(t.Name())
 
 	sct := &SubCommanderTest{
@@ -267,7 +257,7 @@ func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingParameters
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingSameSubCommandAndGlobalFlagPanics(t *testing.T) {
+func TestSubCommander_ExecuteContext_ParsingSubCommandError_SettingSameSubCommandAndGlobalFlagPanics(t *testing.T) {
 	gfs := clitest.NewStringsFlagSetter("foo")
 	sfs := clitest.NewStringsFlagSetter("foo")
 
@@ -294,7 +284,7 @@ func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingSameSubCom
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithDisallowGlobalOptionsSet(t *testing.T) {
+func TestSubCommander_ExecuteContext_WorksCorrectlyWithDisallowGlobalOptionsSet(t *testing.T) {
 	gfs := clitest.NewStringsFlagSetter("g1")
 	sfs := clitest.NewStringsFlagSetter("s1")
 
@@ -316,7 +306,7 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithDisallowGlobalOptionsS
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_ErrorsWithDisallowGlobalsAndGlobalOptionSetAfterSubCommand(t *testing.T) {
+func TestSubCommander_ExecuteContext_ErrorsWithDisallowGlobalsAndGlobalOptionSetAfterSubCommand(t *testing.T) {
 	gfs := clitest.NewStringsFlagSetter("g1")
 	sfs := clitest.NewStringsFlagSetter("s1")
 	err := fmt.Errorf("flag provided but not defined: %v", "-g1")
@@ -341,7 +331,7 @@ func TestSubCommander_ExecuteContextOut_ErrorsWithDisallowGlobalsAndGlobalOption
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithAlias(t *testing.T) {
+func TestSubCommander_ExecuteContext_WorksCorrectlyWithAlias(t *testing.T) {
 	sct := &SubCommanderTest{
 		SubCommands: []SubCommand{
 			&SubCommandStruct{
@@ -357,10 +347,11 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithAlias(t *testing.T) {
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubCommandAndCorrectOutputsAndCorrectErrorHappyPath(t *testing.T) {
+func TestSubCommander_ExecuteContext_WorksCorrectlyWithGlobalOptionsAfterSubCommandAndCorrectOutputsAndCorrectErrorHappyPath(t *testing.T) {
 	gfs := &clitest.SimpleFlagSetter{Suffix: "1"}
 	sfs := &clitest.SimpleFlagSetter{Suffix: "2"}
 
+	actualIn := strings.NewReader("")
 	executeCalled := false
 	setParametersCalled := false
 	ctx := context.WithValue(context.Background(), 0, 1)
@@ -400,10 +391,13 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubC
 						return nil
 					},
 				},
-				ExecuteValue: func(actualCtx context.Context, out, outErr io.Writer) error {
+				ExecuteValue: func(actualCtx context.Context, in io.Reader, out, outErr io.Writer) error {
 					executeCalled = true
 					if actualCtx != ctx {
 						t.Error("did not receive correct context in execute method")
+					}
+					if actualIn != in {
+						t.Error("did not receive correct in in execute method")
 					}
 					fmt.Fprintf(out, "out")
 					fmt.Fprintf(outErr, "outErr")
@@ -413,6 +407,7 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubC
 		},
 		Context:      ctx,
 		Args:         strings.Fields("-int1 1029 -string1 whoami sub -string2 cli foo -bool2 bar"),
+		In:           actualIn,
 		OutString:    "out",
 		OutErrString: "outErr",
 		Err:          &ExecutingSubCommandError{err},
@@ -434,7 +429,7 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubC
 	}
 }
 
-func TestSubCommander_ExecuteContextOut_ReturnsNilErrorWhenNothingGoesWrong(t *testing.T) {
+func TestSubCommander_ExecuteContext_ReturnsNilErrorWhenNothingGoesWrong(t *testing.T) {
 	sct := &SubCommanderTest{
 		SubCommands: []SubCommand{
 			&SubCommandStruct{
@@ -448,7 +443,7 @@ func TestSubCommander_ExecuteContextOut_ReturnsNilErrorWhenNothingGoesWrong(t *t
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorParsingSubCommandParameters(t *testing.T) {
+func TestSubCommander_ExecuteContext_SubCommandRegisteredHelpWillErrorParsingSubCommandParameters(t *testing.T) {
 	formattedParameter := FormatParameter(&cli.Parameter{Name: SubCommandName})
 	outErrStringSuffix := "\n\n" + Usage + " ... help [parameters...]" +
 		"\n\n" + ParametersName + ": " + formattedParameter + "\n" +
@@ -480,7 +475,7 @@ func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorParsing
 
 }
 
-func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorWithUnknownSubCommand(t *testing.T) {
+func TestSubCommander_ExecuteContext_SubCommandRegisteredHelpWillErrorWithUnknownSubCommand(t *testing.T) {
 	err := UnknownSubCommandError("sub")
 
 	sct := &SubCommanderTest{
@@ -494,7 +489,7 @@ func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorWithUnk
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithRegisteredHelpSubCommand(t *testing.T) {
+func TestSubCommander_ExecuteContext_WorksCorrectlyWithRegisteredHelpSubCommand(t *testing.T) {
 	sct := &SubCommanderTest{
 		SubCommands: []SubCommand{
 			&SubCommandStruct{
@@ -513,7 +508,7 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithRegisteredHelpSubComma
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_RegisteredHelpWithHelpHelpArgsDoesNotPrintGlobalOptions(t *testing.T) {
+func TestSubCommander_ExecuteContext_RegisteredHelpWithHelpHelpArgsDoesNotPrintGlobalOptions(t *testing.T) {
 	gfs := clitest.NewStringsFlagSetter("global1")
 
 	sc := &SubCommander{
@@ -531,7 +526,7 @@ func TestSubCommander_ExecuteContextOut_RegisteredHelpWithHelpHelpArgsDoesNotPri
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_RegisteredHelpWithHelpListArgsDoesNotPrintGlobalOptions(t *testing.T) {
+func TestSubCommander_ExecuteContext_RegisteredHelpWithHelpListArgsDoesNotPrintGlobalOptions(t *testing.T) {
 	gfs := clitest.NewStringsFlagSetter("global1")
 
 	sc := &SubCommander{
@@ -548,7 +543,7 @@ func TestSubCommander_ExecuteContextOut_RegisteredHelpWithHelpListArgsDoesNotPri
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_SubCommandRegisteredListErrorParsingSubCommandParameters(t *testing.T) {
+func TestSubCommander_ExecuteContext_SubCommandRegisteredListErrorParsingSubCommandParameters(t *testing.T) {
 	err := cli.ErrTooManyParameters
 
 	sct := &SubCommanderTest{
@@ -561,7 +556,7 @@ func TestSubCommander_ExecuteContextOut_SubCommandRegisteredListErrorParsingSubC
 	testSubCommanderTest(t, sct)
 }
 
-func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithRegsiteredListSubCommand(t *testing.T) {
+func TestSubCommander_ExecuteContext_WorksCorrectlyWithRegsiteredListSubCommand(t *testing.T) {
 	sct := &SubCommanderTest{
 		RegisterList: true,
 		Args:         strings.Fields("list"),
@@ -581,6 +576,7 @@ type SubCommanderTest struct {
 	Context context.Context
 	Args    []string
 
+	In           io.Reader
 	OutString    string
 	OutErrString string
 	Err          error
@@ -597,7 +593,7 @@ func testSubCommanderTest(t *testing.T, sct *SubCommanderTest, tags ...interface
 	if len(tags) > 0 {
 		prefix += fmt.Sprintf("%v: ", tags[0])
 	}
-	prefix += "sc.ExecuteContextOut()"
+	prefix += "sc.ExecuteContext()"
 
 	sc := sct.SubCommander
 	if sc == nil {
@@ -622,7 +618,11 @@ func testSubCommanderTest(t *testing.T, sct *SubCommanderTest, tags ...interface
 		sct.Context = context.Background()
 	}
 
-	out, outErr, err := executeContextOut(sc, sct.Context, sct.Args)
+	if sct.In == nil {
+		sct.In = bytes.NewBuffer([]byte{})
+	}
+
+	out, outErr, err := executeContext(sc, sct.Context, sct.Args, sct.In)
 
 	outString := out.String()
 	outErrString := outErr.String()
@@ -655,14 +655,14 @@ func testSubCommanderTest(t *testing.T, sct *SubCommanderTest, tags ...interface
 	}
 }
 
-func executeContextOut(sc *SubCommander, ctx context.Context, args []string) (*bytes.Buffer, *bytes.Buffer, error) {
+func executeContext(sc *SubCommander, ctx context.Context, args []string, in io.Reader) (*bytes.Buffer, *bytes.Buffer, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	out, outErr := clitest.NewOutputs()
 
-	err := sc.ExecuteContextOut(ctx, args, out, outErr)
+	err := sc.ExecuteContext(ctx, args, in, out, outErr)
 
 	return out, outErr, err
 }
