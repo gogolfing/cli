@@ -24,7 +24,7 @@ type CommandStruct struct {
 	cli.ParameterSetter
 
 	//ExecuteValue is used as the Command's implementation if not nil.
-	ExecuteValue func(context.Context, io.Writer, io.Writer) error
+	ExecuteValue func(context.Context, io.Reader, io.Writer, io.Writer) error
 }
 
 //Description returns cs.DescriptionValue.
@@ -60,9 +60,9 @@ func (cs *CommandStruct) SetParameters(params []string) error {
 //Execute calls and returns the result from cs.ExecuteValue(ctx, out, outErr)
 //if the field is not nil.
 //Otherwise, it returns nil.
-func (cs *CommandStruct) Execute(ctx context.Context, out, outErr io.Writer) error {
+func (cs *CommandStruct) Execute(ctx context.Context, in io.Reader, out, outErr io.Writer) error {
 	if cs.ExecuteValue != nil {
-		return cs.ExecuteValue(ctx, out, outErr)
+		return cs.ExecuteValue(ctx, in, out, outErr)
 	}
 	return nil
 }

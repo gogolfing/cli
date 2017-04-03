@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strings"
 
 	"github.com/gogolfing/cli"
@@ -39,8 +40,9 @@ func (sfs *SimpleFlagSetter) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&sfs.Bool, "bool"+sfs.Suffix, sfs.Bool, "bool_usage")
 }
 
-func NewExecuteFunc(out, outErr string, err error) func(context.Context, io.Writer, io.Writer) error {
-	f := func(_ context.Context, outW, outErrW io.Writer) error {
+func NewExecuteFunc(out, outErr string, err error) func(context.Context, io.Reader, io.Writer, io.Writer) error {
+	f := func(_ context.Context, inR io.Reader, outW, outErrW io.Writer) error {
+		ioutil.ReadAll(inR)
 		fmt.Fprint(outW, out)
 		fmt.Fprint(outErrW, outErr)
 		return err

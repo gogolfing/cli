@@ -60,5 +60,8 @@ type Command interface {
 	//Execute is where the Command should do its work.
 	//A non-nil return value indicates the execution failed and that error will
 	//be processed by a Commander.
-	Execute(ctx context.Context, out, outErr io.Writer) error
+	//Ctx is the Command's Context provided by the calling code.
+	//In, out, and outErr are the standard in, out, and err that the Command should
+	///use.
+	Execute(ctx context.Context, in io.Reader, out, outErr io.Writer) error
 }

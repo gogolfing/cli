@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -19,42 +18,33 @@ import (
 
 var errExecute = errors.New("error executing")
 
-func TestSubCommander_Execute_CallsExecuteContextOutCorrectly(t *testing.T) {
-	oldOut, oldErr := os.Stdout, os.Stderr
-	defer func() {
-		os.Stdout, os.Stderr = oldOut, oldErr
-	}()
-
-	tempDir, _ := ioutil.TempDir(".", "")
-	defer os.RemoveAll(tempDir)
-	out, _ := ioutil.TempFile(tempDir, "")
-	outErr, _ := ioutil.TempFile(tempDir, "")
-	os.Stdout, os.Stderr = out, outErr
-
+func TestSubCommander_Execute_CallsExecuteContextCorrectly(t *testing.T) {
 	c := &Commander{
 		Name: "command",
 		Command: &CommandStruct{
-			ExecuteValue: clitest.NewExecuteFunc("out", "outErr", errExecute),
+			ExecuteValue: func(_ context.Context, in io.Reader, out, outErr io.Writer) error {
+				if in.(*os.File) != os.Stdin {
+					t.Fatal("did not call execute with stdin")
+				}
+				if out.(*os.File) != os.Stdout {
+					t.Fatal("did not call execute with stdin")
+				}
+				if outErr.(*os.File) != os.Stderr {
+					t.Fatal("did not call execute with stdin")
+				}
+				return errExecute
+			},
 		},
 	}
 
 	err := c.Execute(strings.Fields("a"))
 
-	out.Close()
-	outErr.Close()
-
-	if outBytes, _ := ioutil.ReadFile(os.Stdout.Name()); string(outBytes) != "out" {
-		t.Fatalf("out = %v WANT %s", string(outBytes), "out")
-	}
-	if outErrBytes, _ := ioutil.ReadFile(os.Stderr.Name()); string(outErrBytes) != "outErr" {
-		t.Fatalf("outErr = %s WANT %s", outErrBytes, "outErr")
-	}
 	if !reflect.DeepEqual(err, &ExecutingCommandError{errExecute}) {
 		t.Fatalf("err = %v WANT %v", err, errExecute)
 	}
 }
 
-func TestCommander_ExecuteContextOut_ParsingCommandError_FlagErrHelp(t *testing.T) {
+func TestCommander_ExecuteContext_ParsingCommandError_FlagErrHelp(t *testing.T) {
 	description := "this is a description"
 	prefix := "command - " + description
 
@@ -72,7 +62,7 @@ func TestCommander_ExecuteContextOut_ParsingCommandError_FlagErrHelp(t *testing.
 	testCommanderTest(t, ct)
 }
 
-func TestCommander_ExecuteContextOut_ParsingCommandError_OtherErrorWithOptionsOnly(t *testing.T) {
+func TestCommander_ExecuteContext_ParsingCommandError_OtherErrorWithOptionsOnly(t *testing.T) {
 	fs := clitest.NewStringsFlagSetter("foo")
 	err := errors.New("flag provided but not defined: -value")
 
@@ -93,7 +83,7 @@ func TestCommander_ExecuteContextOut_ParsingCommandError_OtherErrorWithOptionsOn
 	testCommanderTest(t, ct)
 }
 
-func TestCommander_ExecuteContextOut_ParsingCommandError_OtherErrorWithOptionsAndParametersButWithoutDescription(t *testing.T) {
+func TestCommander_ExecuteContext_ParsingCommandError_OtherErrorWithOptionsAndParametersButWithoutDescription(t *testing.T) {
 	fs := clitest.NewStringsFlagSetter("foo")
 	err := errors.New("flag provided but not defined: -value")
 
@@ -122,7 +112,7 @@ func TestCommander_ExecuteContextOut_ParsingCommandError_OtherErrorWithOptionsAn
 	testCommanderTest(t, ct)
 }
 
-func TestCommander_ExecuteContextOut_ParsingCommandError_SetParamtersErrorWithParametersButNotExtraParameterUsage(t *testing.T) {
+func TestCommander_ExecuteContext_ParsingCommandError_SetParamtersErrorWithParametersButNotExtraParameterUsage(t *testing.T) {
 	err := errors.New("parameter error")
 
 	ct := &CommanderTest{
@@ -149,7 +139,7 @@ func TestCommander_ExecuteContextOut_ParsingCommandError_SetParamtersErrorWithPa
 	testCommanderTest(t, ct)
 }
 
-func TestCommander_ExecuteContextOut_ExecutionError(t *testing.T) {
+func TestCommander_ExecuteContext_ExecutionError(t *testing.T) {
 	err := errExecute
 
 	ct := &CommanderTest{
@@ -164,10 +154,11 @@ func TestCommander_ExecuteContextOut_ExecutionError(t *testing.T) {
 	testCommanderTest(t, ct)
 }
 
-func TestCommander_ExecuteContextOut_WorksCorrectly(t *testing.T) {
+func TestCommander_ExecuteContext_WorksCorrectly(t *testing.T) {
 	err := errExecute
 	fs := &clitest.SimpleFlagSetter{}
 
+	actualIn := strings.NewReader("in")
 	setParametersCalled, executeCalled := false, false
 	ctx := context.WithValue(context.Background(), 0, 1)
 
@@ -184,10 +175,13 @@ func TestCommander_ExecuteContextOut_WorksCorrectly(t *testing.T) {
 						return nil
 					},
 				},
-				ExecuteValue: func(actualCtx context.Context, out io.Writer, outErr io.Writer) error {
+				ExecuteValue: func(actualCtx context.Context, in io.Reader, out io.Writer, outErr io.Writer) error {
 					executeCalled = true
 					if actualCtx != ctx {
 						t.Error("did not receive correct context in execute method")
+					}
+					if actualIn != in {
+						t.Error("did not receive correct in in execute method")
 					}
 					fmt.Fprintf(out, "out")
 					fmt.Fprintf(outErr, "outErr")
@@ -197,6 +191,7 @@ func TestCommander_ExecuteContextOut_WorksCorrectly(t *testing.T) {
 		},
 		Context:      ctx,
 		Args:         strings.Fields("foo -int 1234 -string value -bool bar -- hello -world"),
+		In:           actualIn,
 		OutString:    "out",
 		OutErrString: "outErr",
 		Err:          &ExecutingCommandError{err},
@@ -215,7 +210,7 @@ func TestCommander_ExecuteContextOut_WorksCorrectly(t *testing.T) {
 	}
 }
 
-func TestCommander_ExecuteContextOut_ReturnsNilErrorWhenNothingGoesWrong(t *testing.T) {
+func TestCommander_ExecuteContext_ReturnsNilErrorWhenNothingGoesWrong(t *testing.T) {
 	ct := &CommanderTest{
 		Commander: &Commander{
 			Command: &CommandStruct{
@@ -233,13 +228,15 @@ type CommanderTest struct {
 	Context context.Context
 	Args    []string
 
+	In io.Reader
+
 	OutString    string
 	OutErrString string
 	Err          error
 }
 
 func testCommanderTest(t *testing.T, ct *CommanderTest) {
-	prefix := fmt.Sprintf("%s: %s", t.Name(), "c.ExecuteContextOut()")
+	prefix := fmt.Sprintf("%s: %s", t.Name(), "c.ExecuteContext()")
 
 	if ct.Commander.Name == "" {
 		ct.Commander.Name = "command"
@@ -249,7 +246,11 @@ func testCommanderTest(t *testing.T, ct *CommanderTest) {
 		ct.Context = context.Background()
 	}
 
-	out, outErr, err := executeContextOut(ct.Commander, ct.Context, ct.Args)
+	if ct.In == nil {
+		ct.In = bytes.NewBuffer([]byte{})
+	}
+
+	out, outErr, err := executeContext(ct.Commander, ct.Context, ct.Args, ct.In)
 
 	outString := out.String()
 	outErrString := outErr.String()
@@ -282,14 +283,14 @@ func testCommanderTest(t *testing.T, ct *CommanderTest) {
 	}
 }
 
-func executeContextOut(c *Commander, ctx context.Context, args []string) (*bytes.Buffer, *bytes.Buffer, error) {
+func executeContext(c *Commander, ctx context.Context, args []string, in io.Reader) (*bytes.Buffer, *bytes.Buffer, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	out, outErr := clitest.NewOutputs()
 
-	err := c.ExecuteContextOut(ctx, args, out, outErr)
+	err := c.ExecuteContext(ctx, args, in, out, outErr)
 
 	return out, outErr, err
 }

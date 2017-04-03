@@ -23,26 +23,14 @@ type Commander struct {
 	Command
 }
 
-//Execute is syntactic sugar for ExecuteContext() with context.Background().
+//Execute is syntactic sugar for ExecuteContext() with context.Background(), args,
+//os.Stdin, os.Stdout, and os.Stderr.
 func (c *Commander) Execute(args []string) error {
-	return c.ExecuteContext(context.Background(), args)
+	return c.ExecuteContext(context.Background(), args, os.Stdin, os.Stdout, os.Stderr)
 }
 
-//ExecuteContext is syntactic sugar for ExecuteContextOut() with os.Stdout and os.Stderr.
-func (c *Commander) ExecuteContext(ctx context.Context, args []string) error {
-	return c.ExecuteContextOut(ctx, args, os.Stdout, os.Stderr)
-}
-
-//ExecuteContextOut attempts to execute c.Command.
-//ctx will be passed along unaltered to the Command's Execute() method.
-//args are the command line arguments to parse and use for Command execution.
-//They should include command line arguments excluding the program name - usually os.Args[1:].
-//out and outErr are the io.Writers to use for standard out and standard error
-//for Command execution and help and error output.
-//
-//TODO
-func (c *Commander) ExecuteContextOut(ctx context.Context, args []string, out, outErr io.Writer) error {
-	err := c.executeContextOut(ctx, args, out, outErr)
+func (c *Commander) ExecuteContext(ctx context.Context, args []string, in io.Reader, out, outErr io.Writer) error {
+	err := c.executeContext(ctx, args, in, out, outErr)
 	if err == nil {
 		return nil
 	}
@@ -58,7 +46,7 @@ func (c *Commander) ExecuteContextOut(ctx context.Context, args []string, out, o
 	return err
 }
 
-func (c *Commander) executeContextOut(ctx context.Context, args []string, out, outErr io.Writer) error {
+func (c *Commander) executeContext(ctx context.Context, args []string, in io.Reader, out, outErr io.Writer) error {
 	f := cli.NewFlagSet(c.Name, c)
 
 	params, err := cli.ParseArgumentsInterspersed(f, args)
@@ -69,7 +57,7 @@ func (c *Commander) executeContextOut(ctx context.Context, args []string, out, o
 		return &ParsingCommandError{err}
 	}
 
-	if err := c.Command.Execute(ctx, out, outErr); err != nil {
+	if err := c.Command.Execute(ctx, in, out, outErr); err != nil {
 		return &ExecutingCommandError{err}
 	}
 
