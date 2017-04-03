@@ -1,2 +1,2 @@
 # cli
-Opinionated utility for command line applications with emphasis on sub-commands.
+Opinionated utility for command line applications with options for commands or sub-commands.
