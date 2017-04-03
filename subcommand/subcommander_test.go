@@ -267,6 +267,33 @@ func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingParameters
 	testSubCommanderTest(t, sct)
 }
 
+func TestSubCommander_ExecuteContextOut_ParsingSubCommandError_SettingSameSubCommandAndGlobalFlagPanics(t *testing.T) {
+	gfs := clitest.NewStringsFlagSetter("foo")
+	sfs := clitest.NewStringsFlagSetter("foo")
+
+	sct := &SubCommanderTest{
+		SubCommander: &SubCommander{
+			GlobalFlags: gfs,
+		},
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue:  "sub",
+				FlagSetter: sfs,
+			},
+		},
+		Args: strings.Fields("sub"),
+	}
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal()
+		}
+	}()
+
+	testSubCommanderTest(t, sct)
+}
+
 func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithDisallowGlobalOptionsSet(t *testing.T) {
 	gfs := clitest.NewStringsFlagSetter("g1")
 	sfs := clitest.NewStringsFlagSetter("s1")
@@ -405,6 +432,20 @@ func TestSubCommander_ExecuteContextOut_WorksCorrectlyWithGlobalOptionsAfterSubC
 	if !reflect.DeepEqual(sfs, &clitest.SimpleFlagSetter{Suffix: "2", Int: 0, String: "cli", Bool: true}) {
 		t.Error("sub-command flags were not set correctly")
 	}
+}
+
+func TestSubCommander_ExecuteContextOut_ReturnsNilErrorWhenNothingGoesWrong(t *testing.T) {
+	sct := &SubCommanderTest{
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue:    "sub",
+				ExecuteValue: clitest.NewExecuteFunc("", "", nil),
+			},
+		},
+		Args: strings.Fields("sub"),
+	}
+
+	testSubCommanderTest(t, sct)
 }
 
 func TestSubCommander_ExecuteContextOut_SubCommandRegisteredHelpWillErrorParsingSubCommandParameters(t *testing.T) {

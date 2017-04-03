@@ -215,6 +215,18 @@ func TestCommander_ExecuteContextOut_WorksCorrectly(t *testing.T) {
 	}
 }
 
+func TestCommander_ExecuteContextOut_ReturnsNilErrorWhenNothingGoesWrong(t *testing.T) {
+	ct := &CommanderTest{
+		Commander: &Commander{
+			Command: &CommandStruct{
+				ExecuteValue: clitest.NewExecuteFunc("", "", nil),
+			},
+		},
+	}
+
+	testCommanderTest(t, ct)
+}
+
 type CommanderTest struct {
 	*Commander
 

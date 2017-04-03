@@ -225,15 +225,6 @@ func (sc *SubCommander) executeSubCommand(
 	args []string,
 	out, outErr io.Writer,
 ) (err error) {
-	defer func() {
-		if err != nil {
-			return
-		}
-		if r := recover(); r != nil {
-			err = &ParsingSubCommandError{fmt.Errorf("%v", r)}
-		}
-	}()
-
 	err = sc.parseSubCommandArgs(subCommand, args)
 	if err != nil {
 		err = &ParsingSubCommandError{err}
