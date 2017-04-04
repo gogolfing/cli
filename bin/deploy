@@ -27,7 +27,7 @@ fi
 git push origin master tag "$version"
 did_push=$?
 
-echo "\n"
+echo ""
 
 if [ $did_push -eq 0 ]; then
     echo "Version bump, tag, and push to origin/master successful!!"
