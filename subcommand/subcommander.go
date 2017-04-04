@@ -137,12 +137,17 @@ func (sc *SubCommander) Execute(args []string) error {
 //SubCommand.
 //
 //Err will be non-nil if parsing args failed - with type *ParsingGlobalArgsError,
-//*ParsingSubCommandError, or UnknownSubCommandError.
+//*ParsingSubCommandError.
+//It will be ErrUnsuppliedSubCommand if the subcommand is not supplied in command
+//line arguments.
+//It will be of type UnknownSubCommandError if the subcommand name arguments supplied
+//was not found in the registered SubCommands' names or aliases.
 //It will be of type *ExecutingSubCommandError if the SubCommand.Execute
 //method returns an error.
 //
 //If the returned error is of type *ParsingGlobalArgsError, *ParsingSubCommandError,
-//or UnknownSubCommandError then error and help output will be written to outErr.
+//ErrUnsuppliedSubCommand, or UnknownSubCommandError then error and help output
+//will be written to outErr.
 //See the package documentation for more details on error and help output.
 //If this is the error, then execution stops and SubCommand.Execute is never called.
 //

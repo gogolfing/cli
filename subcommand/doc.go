@@ -10,11 +10,19 @@
 //The help and error output follow the general form loosely based on Go templates:
 //	{{.ErrorIfAParsingErrorNotAnExecutionError}}
 //
-//	{{.SubCommandNameAndDescriptionIfErrHelp}}
+//	{{if .KnowTheSubCommand}}
+//		{{.SubCommandNameAndDescriptionIfErrHelp}}
 //
-//	usage: {{.SubCommander.CommandName}} {{.AvailableCommandLineArguments}}
+//		usage: {{.SubCommander.CommandName}} {{.AvailableCommandLineArguments}}
 //
-//	{{.AvailableFlagOptionUsageIfThereAreOptions}}
+//		{{.AvailableFlagOptionUsageIfThereAreOptions}}
 //
-//	{{.AvailableParameterUsageIfThereAreParameters}}
+//		{{.AvailableParameterUsageIfThereAreParameters}}
+//	{{else}}
+//		{{.GlobalOptionUsageIfThereAreGlobalOptions}}
+//
+//		{{.AllSubCommandUsage}}
+//	{{end}}
+//
+//Please see the examples for actual output.
 package subcommand

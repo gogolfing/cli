@@ -18,4 +18,6 @@
 //	{{.AvailableFlagOptionUsageIfThereAreOptions}}
 //
 //	{{.AvailableParameterUsageIfThereAreParameters}}
+//
+//Please see the examples for actual output.
 package command
