@@ -170,7 +170,7 @@ func TestCommander_ExecuteContext_WorksCorrectly(t *testing.T) {
 					SetParametersValue: func(params []string) error {
 						setParametersCalled = true
 						if !reflect.DeepEqual(params, []string{"foo", "bar", "hello", "-world"}) {
-							t.Fatal("incorrect paramters")
+							t.Fatal("incorrect parameters")
 						}
 						return nil
 					},

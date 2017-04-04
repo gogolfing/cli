@@ -18,7 +18,7 @@ func Example() {
 		f.IntVar(&count, "count", count, "number of times to print parameters")
 	})
 
-	var params []string = nil
+	var params []string
 	command := &CommandStruct{
 		DescriptionValue: "example description",
 		FlagSetter:       fs,
@@ -77,7 +77,7 @@ func Example_errorFlagErrHelp() {
 		Command: command,
 	}
 
-	//We set the outErr paramter to os.Stdout so that we can validate the test output.
+	//We set the outErr parameter to os.Stdout so that we can validate the test output.
 	commander.ExecuteContext(
 		context.Background(),
 		strings.Fields("-h"),
@@ -113,7 +113,7 @@ func Example_errorParsingArguments() {
 		Command: command,
 	}
 
-	//We set the outErr paramter to os.Stdout so that we can validate the test output.
+	//We set the outErr parameter to os.Stdout so that we can validate the test output.
 	commander.ExecuteContext(
 		context.Background(),
 		strings.Fields("-value foobar"),

@@ -32,7 +32,7 @@ func TestSubCommander_RegisterHelp_RegistersWithNameAndAlaises(t *testing.T) {
 		t.Fatalf("help should be registered")
 	}
 	if sc.aliases["h"] == nil {
-		t.Fatalf("h should be registerd")
+		t.Fatalf("h should be registered")
 	}
 }
 

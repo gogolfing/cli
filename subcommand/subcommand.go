@@ -22,7 +22,7 @@ const (
 	ArgumentSeparator = cli.ArgumentSeparator
 )
 
-//ForamtArgument formats an argument's name given whether or not it is optional
+//FormatArgument formats an argument's name given whether or not it is optional
 //or multiple values are allowed.
 //
 //This value may be changed to affect the output of this package.

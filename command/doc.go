@@ -13,7 +13,7 @@
 //
 //	{{.CommandNameAndDescriptionIfErrHelp}}
 //
-//	usage: {{.AvailableCommandLineArguments}}
+//	usage: {{Commander.Name}} {{.AvailableCommandLineArguments}}
 //
 //	{{.AvailableFlagOptionUsageIfThereAreOptions}}
 //

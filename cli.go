@@ -29,7 +29,7 @@ type FlagSetter interface {
 	SetFlags(f *flag.FlagSet)
 }
 
-//ForamtArgument formats an argument's name given whether or not it is optional
+//FormatArgument formats an argument's name given whether or not it is optional
 //or multiple values are allowed.
 func FormatArgument(name string, optional, many bool) string {
 	result := name
