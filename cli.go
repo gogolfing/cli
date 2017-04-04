@@ -75,8 +75,9 @@ func GetFlagSetDefaults(f *flag.FlagSet) string {
 	return strings.TrimRight(out.String(), "\n")
 }
 
-//GetJoinedNameSortedAliases return the name followed by the sorted aliases joined
-//by ", ".
+//GetJoinedNameSortedAliases returns name followed by the cloned and sorted aliases
+//all joined by ", ".
+//	GetJoinedNameSortedAliases("c", []string{"b", "a"}) // "c, a, b"
 func GetJoinedNameSortedAliases(name string, aliases []string) string {
 	toSort := make([]string, len(aliases))
 	copy(toSort, aliases)

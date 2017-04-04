@@ -31,24 +31,24 @@ func (c *Commander) Execute(args []string) error {
 
 //ExecuteContext executes c.Command with the provided parameters.
 //
-//Ctx is the context passed unaltered to c.Command.Execute.
+//Ctx is the Context passed unaltered to c.Command.Execute.
 //
 //Args should be the program arguments excluding the program name - usually os.Args[1:].
 //They will be parsed using cli.ParseArgumentsInterspersed.
 //
 //The parameters in, out, and outErr are passed unaltered to c.Command.Execute
 //and should represent the standard input, output, and error files for the executing
-//command.
+//Command.
 //
 //Err will be non-nil if parsing args failed - with type *ParsingCommandError
-//or *ExecutingCommandError if the c.Command.Execute returns an error.
+//or *ExecutingCommandError if the c.Command.Execute method returns an error.
 //
 //If the returned error is of type *ParsingCommandError, then error and help output
 //will be written to outErr. See the package documentation for more details on error
 //and help output. If this is the error, then execution stops and c.Command.Execute
 //is never called.
 //
-//If the error is a *ExecutingCommandError then nothing is output by c.
+//If the error is an *ExecutingCommandError then nothing is output by c.
 func (c *Commander) ExecuteContext(ctx context.Context, args []string, in io.Reader, out, outErr io.Writer) error {
 	err := c.executeContext(ctx, args, in, out, outErr)
 	if err == nil {

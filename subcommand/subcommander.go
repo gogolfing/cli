@@ -21,6 +21,7 @@ import (
 type SubCommander struct {
 	//CommandName is used in error and help output. It should be the name of the
 	//program that was invoked.
+	//Usually os.Args[0].
 	CommandName string
 
 	//GlobalFlags is a FlagSetter that is used for setting global flags for subcommands.
@@ -119,13 +120,35 @@ func (sc *SubCommander) Register(subCommand SubCommand) {
 	}
 }
 
-//Execute is syntactic sugar for ExecuteContext() with context.Background().
+//Execute is syntactic sugar for sc.ExecuteContext() with context.Background(), args,
+//os.Stdin, os.Stdout, and os.Stderr.
 func (sc *SubCommander) Execute(args []string) error {
 	return sc.ExecuteContext(context.Background(), args, os.Stdin, os.Stdout, os.Stderr)
 }
 
+//ExecuteContext executes a SubCommand registered with sc with the provided parameters.
+//
+//Ctx is the Context passed unaltered to SubCommand.Execute.
+//
+//Args should be the program arguments excluding the program name - usually os.Args[1:].
+//
+//The parameters in, out, and outErr are passed unaltered to SubCommand.Execute
+//and should represent the standard input, output, and error files for the executing
+//SubCommand.
+//
+//Err will be non-nil if parsing args failed - with type *ParsingGlobalArgsError,
+//*ParsingSubCommandError, or UnknownSubCommandError.
+//It will be of type *ExecutingSubCommandError if the SubCommand.Execute
+//method returns an error.
+//
+//If the returned error is of type *ParsingGlobalArgsError, *ParsingSubCommandError,
+//or UnknownSubCommandError then error and help output will be written to outErr.
+//See the package documentation for more details on error and help output.
+//If this is the error, then execution stops and SubCommand.Execute is never called.
+//
+//If the error is an *ExecutingSubCommandError then nothing is output by sc.
 func (sc *SubCommander) ExecuteContext(ctx context.Context, args []string, in io.Reader, out, outErr io.Writer) (err error) {
-	var subCommand SubCommand = nil
+	var subCommand SubCommand
 	subCommand, err = sc.executeContext(ctx, args, in, out, outErr)
 	if err == nil {
 		return

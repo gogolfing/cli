@@ -1,6 +1,20 @@
 package cli
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
+
+func TestExitStatusError_Error(t *testing.T) {
+	err := &ExitStatusError{
+		Code: 1,
+		Err:  fmt.Errorf("error"),
+	}
+
+	if err.Error() != "error" {
+		t.Fatal()
+	}
+}
 
 func TestRequiredParameterNotSetError_Error(t *testing.T) {
 	err := &RequiredParameterNotSetError{

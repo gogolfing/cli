@@ -6,14 +6,14 @@
 //arguments and executing code once parsing is complete.
 //
 //The Commander type is a simple wrapper that handles executing a Command and providing
-//help and error output in the case of errors no related to executing a command.
+//help and error output in the case of errors not related to executing a Command.
 //
 //The help and error output follow the general form loosely based on Go templates.
 //	{{.ErrorIfAParsingErrorNotAnExecutionError}}
 //
 //	{{.CommandNameAndDescriptionIfErrHelp}}
 //
-//	usage: {{Commander.Name}} {{.AvailableCommandLineArguments}}
+//	usage: {{.Commander.Name}} {{.AvailableCommandLineArguments}}
 //
 //	{{.AvailableFlagOptionUsageIfThereAreOptions}}
 //

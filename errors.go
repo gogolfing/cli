@@ -6,13 +6,19 @@ import (
 )
 
 //ExitStatusError allows wrapping together an exit status with an error providing
-//that exist code.
+//that exit code.
 type ExitStatusError struct {
 	//Code is the desired exit status.
 	Code int
 
-	//error is the wrapped error.
-	error
+	//Err is the wrapped error.
+	Err error
+}
+
+//Error is the error implementation for e.
+//It returns e.Err.Error()
+func (e *ExitStatusError) Error() string {
+	return e.Err.Error()
 }
 
 //ErrInvalidParameters is a generic error for invalid parameters being set.
@@ -25,9 +31,13 @@ var ErrInvalidParameters = errors.New("invalid parameters")
 //If Formatted is not empty, then it is used in Error(). Otherwise, Name is used.
 //It is up to client code to set Formatted if that output is desired.
 type RequiredParameterNotSetError struct {
+	//Name is the name of the Parameter.
 	Name string
+
+	//Many is the Many option of the Parameter.
 	Many bool
 
+	//Formatted may be provided to override output of Error().
 	Formatted string
 }
 
