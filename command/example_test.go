@@ -53,7 +53,7 @@ func Example() {
 	//aabb
 }
 
-func Example_ErrorFlagErrHelp() {
+func ExampleErrorFlagErrHelp() {
 	command := &CommandStruct{
 		DescriptionValue: "this is a description.",
 		ParameterSetter: &clitest.ParameterSetterStruct{
@@ -95,7 +95,7 @@ func Example_ErrorFlagErrHelp() {
 	// extra parameter usage
 }
 
-func Example_ErrorParsingArguments() {
+func ExampleErrorParsingArguments() {
 	fs := clitest.FlagSetterFunc(func(f *flag.FlagSet) {
 		f.Int("count", 0, "number of times to print parameters")
 	})
