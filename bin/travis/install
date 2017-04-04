@@ -4,7 +4,6 @@ mkdir -p $GOPATH/src
 mkdir -p $GOPATH/bin
 mkdir -p $GOPATH/pkg
 export GOBIN="$GOPATH/bin"
-export PATH="$PATH:$GOBIN"
 
 go get github.com/axw/gocov/gocov
 go get github.com/ericelsken/goveralls
