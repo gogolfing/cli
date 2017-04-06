@@ -139,6 +139,31 @@ func TestCommander_ExecuteContext_ParsingCommandError_SetParamtersErrorWithParam
 	testCommanderTest(t, ct)
 }
 
+func TestCommander_ExecuteContext_ParsingCommandError_StillPrintsExtraUsageOnNoParameterSetError(t *testing.T) {
+	err := cli.ErrTooManyParameters
+
+	ct := &CommanderTest{
+		Commander: &Commander{
+			Command: &CommandStruct{
+				ParameterSetter: &clitest.ParameterSetterStruct{
+					SetParametersValue: func(_ []string) error {
+						return err
+					},
+					ParameterUsageValue: func() ([]*cli.Parameter, string) {
+						return nil, "extra parameter usage"
+					},
+				},
+			},
+		},
+		Args: strings.Fields("foobar"),
+		OutErrString: err.Error() + "\n\n" + Usage + " command" + "\n\n" +
+			"extra parameter usage" + "\n",
+		Err: &ParsingCommandError{err},
+	}
+
+	testCommanderTest(t, ct)
+}
+
 func TestCommander_ExecuteContext_ExecutionError(t *testing.T) {
 	err := errExecute
 

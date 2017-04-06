@@ -151,13 +151,18 @@ func (c *Commander) maybePrintOptionsUsage(out io.Writer) {
 
 func (c *Commander) maybePrintParameterUsage(out io.Writer) {
 	params, usage := c.ParameterUsage()
-	if len(params) == 0 {
-		return
-	}
 
-	fmt.Fprintf(out, "\n%s: %s\n", ParametersName, cli.FormatParameters(params, FormatParameter))
+	didPrint := false
+	if formatted := cli.FormatParameters(params, FormatParameter); len(formatted) > 0 {
+		fmt.Fprintf(out, "\n%s: %s", ParametersName, formatted)
+		didPrint = true
+	}
 	if len(usage) > 0 {
-		fmt.Fprintf(out, "%s\n", usage)
+		fmt.Fprintf(out, "\n%s", usage)
+		didPrint = true
+	}
+	if didPrint {
+		fmt.Fprintln(out)
 	}
 }
 

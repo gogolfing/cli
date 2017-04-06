@@ -320,16 +320,14 @@ func (sc *SubCommander) printSubCommandError(out io.Writer, err error, globals b
 
 	fmt.Fprintln(out)
 
-	hasGlobalOptions, hasSubCommandOptions, hasParameters := sc.getSubCommandUsageStats(subCommand)
+	hasGlobalOptions, hasSubCommandOptions, _ := sc.getSubCommandUsageStats(subCommand)
 	if globals && hasGlobalOptions && !sc.DisallowGlobalFlagsWithSubCommand {
 		sc.maybePrintGlobalOptionsUsage(out)
 	}
 	if hasSubCommandOptions {
 		sc.maybePrintSubCommandOptionsUsage(out, subCommand)
 	}
-	if hasParameters {
-		sc.maybePrintParameters(out, subCommand)
-	}
+	sc.maybePrintParameters(out, subCommand)
 }
 
 func (sc *SubCommander) maybePrintSubCommandOptionsUsage(out io.Writer, subCommand SubCommand) {
@@ -343,16 +341,17 @@ func (sc *SubCommander) maybePrintSubCommandOptionsUsage(out io.Writer, subComma
 func (sc *SubCommander) maybePrintParameters(out io.Writer, subCommand SubCommand) {
 	params, usage := subCommand.ParameterUsage()
 
-	result := cli.FormatParameters(params, FormatParameter)
-	if len(usage) > 0 {
-		if len(result) > 0 {
-			result += "\n"
-		}
-		result += usage
+	didPrint := false
+	if formatted := cli.FormatParameters(params, FormatParameter); len(formatted) > 0 {
+		fmt.Fprintf(out, "\n%s: %s", ParametersName, formatted)
+		didPrint = true
 	}
-
-	if len(result) > 0 {
-		fmt.Fprintf(out, "\n%s: %s\n", ParametersName, result)
+	if len(usage) > 0 {
+		fmt.Fprintf(out, "\n%s", usage)
+		didPrint = true
+	}
+	if didPrint {
+		fmt.Fprintln(out)
 	}
 }
 

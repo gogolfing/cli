@@ -56,6 +56,6 @@ func (e *RequiredParameterNotSetError) Error() string {
 	)
 }
 
-//ErrTooManyParameters is a sentinel value that clients can use to signal that
+//ErrTooManyParameters is an error value that clients can use to signal that
 //too many parameters were provided to a ParameterSetter.
 var ErrTooManyParameters = fmt.Errorf("too many parameters")

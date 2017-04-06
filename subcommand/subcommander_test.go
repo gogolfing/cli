@@ -257,6 +257,32 @@ func TestSubCommander_ExecuteContext_ParsingSubCommandError_SettingParametersErr
 	testSubCommanderTest(t, sct)
 }
 
+func TestSubCommander_ExecuteContext_ParsingSubCommandError_SettingParametersError_StillPrintsExtraUsageOnNoParameterSetError(t *testing.T) {
+	err := cli.ErrTooManyParameters
+
+	sct := &SubCommanderTest{
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue: "a",
+				ParameterSetter: &clitest.ParameterSetterStruct{
+					SetParametersValue: func(_ []string) error {
+						return err
+					},
+					ParameterUsageValue: func() ([]*cli.Parameter, string) {
+						return nil, "extra parameter usage"
+					},
+				},
+			},
+		},
+		Args: strings.Fields("a foo bar"),
+		OutErrString: err.Error() + "\n\n" + "usage: ... a" + "\n\n" +
+			"extra parameter usage" + "\n",
+		Err: &ParsingSubCommandError{err},
+	}
+
+	testSubCommanderTest(t, sct)
+}
+
 func TestSubCommander_ExecuteContext_ParsingSubCommandError_SettingSameSubCommandAndGlobalFlagPanics(t *testing.T) {
 	gfs := clitest.NewStringsFlagSetter("foo")
 	sfs := clitest.NewStringsFlagSetter("foo")
