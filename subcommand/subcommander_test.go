@@ -373,6 +373,25 @@ func TestSubCommander_ExecuteContext_WorksCorrectlyWithAlias(t *testing.T) {
 	testSubCommanderTest(t, sct)
 }
 
+func TestSubCommander_ExecuteContext_DefaultSubCommandOptionsDontOverrideGlobals(t *testing.T) {
+	gfs := &clitest.SimpleFlagSetter{}
+
+	sct := &SubCommanderTest{
+		SubCommander: &SubCommander{
+			GlobalFlags: gfs,
+		},
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue: "sub",
+			},
+		},
+		Args: strings.Fields("-int 8 sub"),
+	}
+
+	testSubCommanderTest(t, sct)
+
+}
+
 func TestSubCommander_ExecuteContext_WorksCorrectlyWithGlobalOptionsAfterSubCommandAndCorrectOutputsAndCorrectErrorHappyPath(t *testing.T) {
 	gfs := &clitest.SimpleFlagSetter{Suffix: "1"}
 	sfs := &clitest.SimpleFlagSetter{Suffix: "2"}
