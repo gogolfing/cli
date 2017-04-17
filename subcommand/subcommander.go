@@ -229,13 +229,13 @@ func (sc *SubCommander) getSubCommand(name string) SubCommand {
 
 func (sc *SubCommander) executeSubCommand(
 	ctx context.Context,
-	gfs *flag.FlagSet,
+	f *flag.FlagSet,
 	subCommand SubCommand,
 	args []string,
 	in io.Reader,
 	out, outErr io.Writer,
 ) (err error) {
-	err = sc.parseSubCommandArgs(subCommand, args)
+	err = sc.parseSubCommandArgs(subCommand, f, args)
 	if err != nil {
 		err = &ParsingSubCommandError{err}
 		return
@@ -249,10 +249,13 @@ func (sc *SubCommander) executeSubCommand(
 	return
 }
 
-func (sc *SubCommander) parseSubCommandArgs(subCommand SubCommand, args []string) error {
-	f := cli.NewFlagSet(subCommand.Name(), subCommand)
-	if !sc.DisallowGlobalFlagsWithSubCommand && sc.GlobalFlags != nil {
-		sc.GlobalFlags.SetFlags(f)
+func (sc *SubCommander) parseSubCommandArgs(subCommand SubCommand, gf *flag.FlagSet, args []string) error {
+	f := gf
+	if sc.DisallowGlobalFlagsWithSubCommand {
+		f = cli.NewFlagSet(subCommand.Name(), nil)
+	}
+	if fs, ok := subCommand.(cli.FlagSetter); ok {
+		fs.SetFlags(f)
 	}
 
 	params, err := cli.ParseArgumentsInterspersed(f, args)
