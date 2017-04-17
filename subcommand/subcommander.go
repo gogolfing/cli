@@ -229,13 +229,13 @@ func (sc *SubCommander) getSubCommand(name string) SubCommand {
 
 func (sc *SubCommander) executeSubCommand(
 	ctx context.Context,
-	f *flag.FlagSet,
+	gf *flag.FlagSet,
 	subCommand SubCommand,
 	args []string,
 	in io.Reader,
 	out, outErr io.Writer,
 ) (err error) {
-	err = sc.parseSubCommandArgs(subCommand, f, args)
+	err = sc.parseSubCommandArgs(subCommand, gf, args)
 	if err != nil {
 		err = &ParsingSubCommandError{err}
 		return
