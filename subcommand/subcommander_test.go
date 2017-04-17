@@ -373,6 +373,35 @@ func TestSubCommander_ExecuteContext_WorksCorrectlyWithAlias(t *testing.T) {
 	testSubCommanderTest(t, sct)
 }
 
+//Test to cover Issue #8.
+//This ensures that when a global flag is set with a default value, the non-presence
+//of the flag in sub-command arguments does not override what was set in the global
+//arguments.
+func TestSubCommander_ExecuteContext_DefaultSubCommandOptionsDontOverrideGlobals(t *testing.T) {
+	value := ""
+	gfs := clitest.FlagSetterFunc(func(f *flag.FlagSet) {
+		f.StringVar(&value, "value", "an actual thing", "")
+	})
+
+	sct := &SubCommanderTest{
+		SubCommander: &SubCommander{
+			GlobalFlags: gfs,
+		},
+		SubCommands: []SubCommand{
+			&SubCommandStruct{
+				NameValue: "sub",
+			},
+		},
+		Args: strings.Fields("-value foobar sub"),
+	}
+
+	testSubCommanderTest(t, sct)
+
+	if value != "foobar" {
+		t.Fatal()
+	}
+}
+
 func TestSubCommander_ExecuteContext_WorksCorrectlyWithGlobalOptionsAfterSubCommandAndCorrectOutputsAndCorrectErrorHappyPath(t *testing.T) {
 	gfs := &clitest.SimpleFlagSetter{Suffix: "1"}
 	sfs := &clitest.SimpleFlagSetter{Suffix: "2"}
